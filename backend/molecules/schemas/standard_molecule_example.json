@@ -1,0 +1,44 @@
+{
+  "@context": {
+    "molecule": "https://schema.org/MolecularEntity",
+    "metadata": "https://schema.org/creativeWork",
+    "geometry": "https://qudt.org/schema/qudt/Quantity",
+    "atoms": "https://www.ebi.ac.uk/chebi/searchId.do?chebiId=CHEBI:33250",
+    "bonds": "https://www.ebi.ac.uk/ols/ontologies/chebi/terms?iri=http://purl.obolibrary.org/obo/CHEBI_46787",
+    "units": "https://qudt.org/vocab/unit/ANGSTROM",
+    "inchi": "https://www.inchi-trust.org/",
+    "doi": "https://www.doi.org/"
+  },
+  "metadata": {
+    "name": "Cafeína",
+    "license": "CC-BY-4.0",
+    "provenance": {
+      "source_software": "Avogadro2",
+      "source_file": "caffeine.cml",
+      "conversion_tool": "molecules.fair_json",
+      "conversion_date": "2025-01-23T12:00:00Z"
+    }
+  },
+  "geometry": {
+    "x": [0.0, 1.2, -0.8],
+    "y": [0.0, 0.0, 0.6],
+    "z": [0.0, 0.0, 0.0],
+    "element": ["C", "N", "O"],
+    "atomic_number": [6, 7, 8],
+    "atom_ids": ["a1", "a2", "a3"]
+  },
+  "topology": {
+    "bonds": [
+      { "i": 0, "j": 1, "order": 1 },
+      { "i": 0, "j": 2, "order": 2 }
+    ]
+  },
+  "visualization": {
+    "cpk_colors": ["#C8C8C8", "#8F8FFF", "#F00000"],
+    "vdw_radii": [1.7, 1.55, 1.52]
+  },
+  "units": {
+    "length": "angstrom",
+    "angle": "degree"
+  }
+}

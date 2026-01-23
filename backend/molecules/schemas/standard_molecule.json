@@ -1,0 +1,139 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://moleculas3d.local/schemas/standard_molecule.json",
+  "title": "FAIR/MDDB Molecular Structure",
+  "description": "Esquema autodescriptivo para estructuras moleculares. Cumple principios FAIR y estándares MDDB (Molecular Dynamics Data Bank).",
+  "type": "object",
+  "required": ["@context", "metadata", "geometry", "units"],
+  "additionalProperties": false,
+  "properties": {
+    "@context": {
+      "type": "object",
+      "description": "JSON-LD context: términos semánticos para interoperabilidad máquina.",
+      "properties": {
+        "molecule": { "type": "string", "format": "uri" },
+        "metadata": { "type": "string", "format": "uri" },
+        "geometry": { "type": "string", "format": "uri" },
+        "atoms": { "type": "string", "format": "uri" },
+        "bonds": { "type": "string", "format": "uri" },
+        "units": { "type": "string", "format": "uri" },
+        "inchi": { "type": "string", "format": "uri" },
+        "doi": { "type": "string", "format": "uri" }
+      },
+      "additionalProperties": true
+    },
+    "metadata": {
+      "type": "object",
+      "description": "Metadata FAIR: identificadores persistentes, licencia, procedencia.",
+      "required": ["name", "provenance"],
+      "properties": {
+        "name": { "type": "string", "minLength": 1 },
+        "doi": { "type": "string", "pattern": "^10\\.\\d{4,}/[^\\s]+$" },
+        "inchikey": { "type": "string", "pattern": "^[A-Z]{14}-[A-Z]{10}-[A-Z]$" },
+        "license": {
+          "type": "string",
+          "enum": ["CC0-1.0", "CC-BY-4.0", "CC-BY-SA-4.0", "MIT", "PDDL", "ODC-BY", "proprietary", "unknown"]
+        },
+        "provenance": {
+          "type": "object",
+          "required": ["source_software"],
+          "properties": {
+            "source_software": {
+              "type": "string",
+              "enum": ["Avogadro2", "OpenBabel", "RDKit", "JMol", "other"]
+            },
+            "source_file": { "type": "string" },
+            "conversion_tool": { "type": "string" },
+            "conversion_date": { "type": "string", "format": "date-time" }
+          }
+        },
+        "version": { "type": "string", "pattern": "^\\d+\\.\\d+" }
+      },
+      "additionalProperties": true
+    },
+    "geometry": {
+      "type": "object",
+      "description": "Esquema de átomos: arreglos tipados para eficiencia y MDDB.",
+      "required": ["x", "y", "z", "element", "atomic_number"],
+      "properties": {
+        "x": {
+          "type": "array",
+          "items": { "type": "number" },
+          "minItems": 1
+        },
+        "y": {
+          "type": "array",
+          "items": { "type": "number" },
+          "minItems": 1
+        },
+        "z": {
+          "type": "array",
+          "items": { "type": "number" },
+          "minItems": 1
+        },
+        "element": {
+          "type": "array",
+          "items": { "type": "string", "pattern": "^[A-Z][a-z]?$" },
+          "minItems": 1
+        },
+        "atomic_number": {
+          "type": "array",
+          "items": { "type": "integer", "minimum": 1, "maximum": 118 },
+          "minItems": 1
+        },
+        "atom_ids": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "IDs opcionales (ej. a1, a2) para mapeo con bonds."
+        }
+      },
+      "additionalProperties": false
+    },
+    "topology": {
+      "type": "object",
+      "description": "MDDB: enlaces, órdenes de enlace, tipos.",
+      "required": ["bonds"],
+      "properties": {
+        "bonds": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["i", "j", "order"],
+            "properties": {
+              "i": { "type": "integer", "minimum": 0 },
+              "j": { "type": "integer", "minimum": 0 },
+              "order": { "type": "integer", "minimum": 1, "maximum": 4, "description": "1=single, 2=double, 3=triple, 4=aromatic" }
+            }
+          }
+        }
+      },
+      "additionalProperties": true
+    },
+    "visualization": {
+      "type": "object",
+      "description": "Atributos de visualización separados de geometría: CPK, VdW.",
+      "properties": {
+        "cpk_colors": {
+          "type": "array",
+          "items": { "type": "string", "pattern": "^#[0-9a-fA-F]{6}$" },
+          "description": "Colores CPK por átomo (hex). Si ausente, derivar de element."
+        },
+        "vdw_radii": {
+          "type": "array",
+          "items": { "type": "number", "minimum": 0 },
+          "description": "Radios Van der Waals (Å). Si ausente, usar tablas estándar."
+        }
+      },
+      "additionalProperties": true
+    },
+    "units": {
+      "type": "object",
+      "description": "Unidades explícitas para interoperabilidad MDDB.",
+      "required": ["length"],
+      "properties": {
+        "length": { "const": "angstrom" },
+        "angle": { "const": "degree" }
+      }
+    }
+  }
+}

@@ -1,0 +1,153 @@
+{% load static %}
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="description" content="Sistema de visualización 3D de moléculas. Sube archivos en formato CML, PDB, SDF, MOL o XYZ y visualízalos en 3D." />
+    <meta name="keywords" content="moléculas, química, visualización 3D, CML, PDB, SDF" />
+    <title>Moléculas 3D - Sistema de Visualización</title>
+    <link rel="stylesheet" href="{% static 'molecules/css/index.css' %}" />
+    <!-- SweetAlert2 (para confirmaciones bonitas). Si no carga, cae a confirm() -->
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+    <script defer src="{% static 'molecules/validaciones.js' %}"></script>
+    <script defer src="{% static 'molecules/js/index.js' %}"></script>
+  </head>
+  <body>
+    <header role="banner">
+      <h1 class="header-title">Moléculas 3D</h1>
+      <p class="hint">Sube un archivo (CML de Avogadro, o PDB/SDF/MOL/XYZ) y visualiza la molécula en 3D.</p>
+    </header>
+    <main class="grid" role="main">
+      <section class="card" aria-labelledby="upload-title">
+        <div class="section-header">
+          <h2 id="upload-title" class="section-title">Subir molécula</h2>
+          <span class="pill" aria-label="Método API">POST /api/molecules/</span>
+        </div>
+
+        {% if created_id %}
+          <div class="ok" role="alert" aria-live="polite">
+            <strong>¡Subida exitosa!</strong> Abrir visor:
+            <a href="/viewer/{{ created_id }}/" aria-label="Abrir visor de molécula {{ created_id }}">/viewer/{{ created_id }}/</a>
+          </div>
+        {% endif %}
+
+        <form method="post" enctype="multipart/form-data" class="form-container" id="upload-form" aria-label="Formulario de subida de molécula">
+          {% csrf_token %}
+          <div class="form-grid">
+            <div class="form-group">
+              <label for="molecule-name">Nombre <span class="required" aria-label="requerido">*</span></label>
+              <input 
+                type="text" 
+                id="molecule-name"
+                name="name" 
+                placeholder="Ej: Cafeína" 
+                required 
+                aria-required="true"
+                aria-describedby="name-hint"
+              />
+              <span id="name-hint" class="field-hint">Nombre descriptivo de la molécula</span>
+            </div>
+            <div class="form-group">
+              <label for="molecule-format">Formato <span class="optional">(opcional)</span></label>
+              <select 
+                id="molecule-format"
+                name="format" 
+                aria-describedby="format-hint"
+              >
+                <option value="">Auto-detectar por extensión</option>
+                <optgroup label="Formatos Básicos">
+                  <option value="cml">CML - Chemical Markup Language</option>
+                  <option value="pdb">PDB - Protein Data Bank</option>
+                  <option value="sdf">SDF - Structure Data Format</option>
+                  <option value="mol">MOL - MDL Molfile</option>
+                  <option value="xyz">XYZ - XYZ Coordinate</option>
+                </optgroup>
+                <optgroup label="Formatos FAIR/MDDB">
+                  <option value="mol2">MOL2 - Tripos Mol2</option>
+                  <option value="cif">CIF - Crystallographic Information File</option>
+                  <option value="mmcif">MMCIF - Macromolecular CIF</option>
+                  <option value="gro">GRO - GROMACS</option>
+                  <option value="pqr">PQR - PQR Format</option>
+                  <option value="pdbqt">PDBQT - AutoDock</option>
+                  <option value="json">JSON - Estructurado</option>
+                </optgroup>
+              </select>
+              <span id="format-hint" class="field-hint">Formatos compatibles con estándares FAIR y MDDB. Si se deja en "Auto-detectar", se infiere por extensión del archivo.</span>
+            </div>
+            <div class="form-group">
+              <label for="molecule-file">Archivo <span class="required" aria-label="requerido">*</span></label>
+              <input 
+                type="file" 
+                id="molecule-file"
+                name="file" 
+                required 
+                aria-required="true"
+                accept=".cml,.pdb,.sdf,.mol,.xyz,.mol2,.cif,.mmcif,.gro,.pqr,.pdbqt,.json"
+                aria-describedby="file-hint"
+              />
+              <span id="file-hint" class="field-hint">Formatos soportados (FAIR/MDDB): CML, PDB, SDF, MOL, XYZ, MOL2, CIF, MMCIF, GRO, PQR, PDBQT, JSON</span>
+            </div>
+            <div class="form-group">
+              <button type="submit" class="btn-primary" aria-label="Subir molécula">
+                <span class="btn-text">Subir</span>
+                <span class="btn-loader" aria-hidden="true" style="display: none;">⏳</span>
+              </button>
+            </div>
+          </div>
+        </form>
+      </section>
+
+      <section class="card" aria-labelledby="molecules-title">
+        <div class="section-header">
+          <h2 id="molecules-title" class="section-title">Últimas moléculas</h2>
+          <span class="pill" aria-label="Base de datos">MongoDB</span>
+        </div>
+        <div class="table-container">
+          <table role="table" aria-label="Lista de moléculas">
+            <thead>
+              <tr>
+                <th scope="col">Nombre</th>
+                <th scope="col">Formato</th>
+                <th scope="col" class="actions-col">Acciones</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for m in items %}
+                <tr>
+                  <td data-label="Nombre">{{ m.name }}</td>
+                  <td data-label="Formato"><span class="format-badge">{{ m.format|upper }}</span></td>
+                  <td data-label="Acciones" class="actions-cell">
+                    <div class="action-buttons" role="group" aria-label="Acciones para {{ m.name }}">
+                      <a href="/viewer/{{ m.id }}/" class="btn-link" aria-label="Ver molécula {{ m.name }}">Ver</a>
+                      <a href="/api/molecules/{{ m.id }}/file/" class="btn-link" aria-label="Descargar archivo de {{ m.name }}" download>Archivo</a>
+                      <form
+                        method="post"
+                        action="/crud/delete/{{ m.id }}/"
+                        class="form-inline"
+                        data-confirm-delete="1"
+                        data-molecule-name="{{ m.name|default:'esta molécula' }}"
+                      >
+                        {% csrf_token %}
+                        <button type="submit" class="btn-delete" aria-label="Eliminar molécula {{ m.name }}">
+                          Eliminar
+                        </button>
+                      </form>
+                    </div>
+                  </td>
+                </tr>
+              {% empty %}
+                <tr>
+                  <td colspan="3" class="empty-state">
+                    <p class="hint">Aún no hay moléculas. Sube la primera y se creará la colección <strong>molecules</strong> en MongoDB.</p>
+                  </td>
+                </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </section>
+    </main>
+  </body>
+</html>
+

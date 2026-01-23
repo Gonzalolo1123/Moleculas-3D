@@ -1,0 +1,197 @@
+{% load static %}
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="description" content="Visualización 3D de la molécula {{ name }}" />
+    <title>Visor 3D - {{ name }}</title>
+    <link rel="stylesheet" href="{% static 'molecules/css/viewer.css' %}" />
+    <script src="https://3dmol.org/build/3Dmol-min.js"></script>
+  </head>
+  <body>
+    <header role="banner" class="viewer-header">
+      <div class="header-top">
+        <div class="header-left">
+          <a href="/" class="btn-close" aria-label="Volver a la página principal" title="Volver">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M19 12H5M12 19l-7-7 7-7"/>
+            </svg>
+            <span>Volver</span>
+          </a>
+          <h1 class="header-title">{{ name }}</h1>
+        </div>
+        <div class="header-actions">
+          {% if fair_json_url %}
+          <a href="{{ fair_json_url }}" class="btn-download btn-download-json" download="molecule.fair.json" aria-label="Descargar FAIR JSON de {{ name }}">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+              <path d="M14 2v6h6M16 13H8M16 17H8M10 9H8"/>
+            </svg>
+            <span>FAIR JSON</span>
+          </a>
+          {% endif %}
+          <a href="{{ file_url }}" class="btn-download" download aria-label="Descargar archivo de {{ name }}">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3"/>
+            </svg>
+            <span>Descargar</span>
+          </a>
+        </div>
+      </div>
+      <div class="header-meta">
+        <span class="pill" aria-label="ID de la molécula">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/>
+            <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/>
+          </svg>
+          ID: {{ molecule_id }}
+        </span>
+        <span class="pill pill-format" aria-label="Formato del archivo">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+            <path d="M14 2v6h6M16 13H8M16 17H8M10 9H8"/>
+          </svg>
+          {{ format|upper }}
+        </span>
+        {% if fair_json_url %}
+        <span class="pill pill-fair" aria-label="Visor FAIR JSON (multiplataforma)">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M9 12l2 2 4-4M7.835 4.697a3.42 3.42 0 0 0 1.946-.806 3.42 3.42 0 0 1 4.438 0 3.42 3.42 0 0 0 1.946.806 3.42 3.42 0 0 1 3.138 3.138 3.42 3.42 0 0 0 .806 1.946 3.42 3.42 0 0 1 0 4.438 3.42 3.42 0 0 0-.806 1.946 3.42 3.42 0 0 1-3.138 3.138 3.42 3.42 0 0 0-1.946.806 3.42 3.42 0 0 1-4.438 0 3.42 3.42 0 0 0-1.946-.806 3.42 3.42 0 0 1-3.138-3.138 3.42 3.42 0 0 0-.806-1.946 3.42 3.42 0 0 1 0-4.438 3.42 3.42 0 0 0 .806-1.946 3.42 3.42 0 0 1 3.138-3.138z"/>
+          </svg>
+          FAIR JSON
+        </span>
+        {% endif %}
+      </div>
+    </header>
+
+    <main role="main" class="viewer-main">
+      <button class="btn-open-controls" id="btn-open-controls" aria-label="Abrir controles" style="display: none;">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M9 18l6-6-6-6"/>
+        </svg>
+        <span>Controles</span>
+      </button>
+      <aside class="viewer-controls" id="viewer-controls" aria-label="Controles del visor">
+        <div class="controls-header">
+          <h2>Controles</h2>
+          <button class="btn-toggle-controls" id="toggle-controls" aria-label="Ocultar controles" aria-expanded="true">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M9 18l6-6-6-6"/>
+            </svg>
+          </button>
+        </div>
+        <div class="controls-content" id="controls-content">
+          <div class="control-group">
+            <label class="control-group-title">Tipos de Visualización</label>
+            <div class="checkbox-group">
+              <label class="checkbox-label">
+                <input type="checkbox" id="display-ball-stick" checked class="display-checkbox">
+                <span>Ball and Stick</span>
+              </label>
+              <label class="checkbox-label">
+                <input type="checkbox" id="display-licorice" class="display-checkbox">
+                <span>Licorice</span>
+              </label>
+              <label class="checkbox-label">
+                <input type="checkbox" id="display-vdw" class="display-checkbox">
+                <span>Van der Waals</span>
+              </label>
+              <label class="checkbox-label">
+                <input type="checkbox" id="display-wireframe" class="display-checkbox">
+                <span>Wireframe</span>
+              </label>
+              <label class="checkbox-label">
+                <input type="checkbox" id="display-stick" class="display-checkbox">
+                <span>Stick</span>
+              </label>
+            </div>
+          </div>
+          <div class="control-group">
+            <label for="color-scheme">Esquema de color</label>
+            <select id="color-scheme" class="control-select">
+              <option value="cpk" selected>CPK (Elementos)</option>
+              <option value="default">Por defecto</option>
+              <option value="ssPyMOL">Secundaria (PyMOL)</option>
+              <option value="amino">Aminoácidos</option>
+              <option value="shapely">Shapely</option>
+            </select>
+          </div>
+          <div class="control-group">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: var(--spacing-xs);">
+              <label for="atom-scale">Escala de átomos</label>
+              <span class="slider-value" id="atom-scale-value">0.30</span>
+            </div>
+            <input type="range" id="atom-scale" min="0.1" max="1.0" step="0.05" value="0.30" class="control-slider">
+          </div>
+          <div class="control-group">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: var(--spacing-xs);">
+              <label for="bond-radius">Radio de enlaces</label>
+              <span class="slider-value" id="bond-radius-value">0.15</span>
+            </div>
+            <input type="range" id="bond-radius" min="0.1" max="1.0" step="0.05" value="0.15" class="control-slider">
+          </div>
+          <div class="control-group">
+            <label for="background-color">Color de fondo</label>
+            <select id="background-color" class="control-select">
+              <option value="black" selected>Negro</option>
+              <option value="white">Blanco</option>
+              <option value="0x0b1220">Oscuro</option>
+              <option value="0xffffff">Claro</option>
+            </select>
+          </div>
+          <div class="control-group">
+            <label class="checkbox-label">
+              <input type="checkbox" id="display-axes" class="display-checkbox">
+              <span>Ejes de referencia</span>
+            </label>
+          </div>
+          <div class="control-actions">
+            <button class="btn-control" id="btn-reset-view" aria-label="Resetear vista">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8M21 8v-3M21 8h-3"/>
+                <path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16M3 16v3M3 16h3"/>
+              </svg>
+              Resetear vista
+            </button>
+            <button class="btn-control" id="btn-zoom-in" aria-label="Acercar">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <circle cx="11" cy="11" r="8"/>
+                <path d="m21 21-4.35-4.35M11 8v6M8 11h6"/>
+              </svg>
+              Acercar
+            </button>
+            <button class="btn-control" id="btn-zoom-out" aria-label="Alejar">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <circle cx="11" cy="11" r="8"/>
+                <path d="m21 21-4.35-4.35M8 11h6"/>
+              </svg>
+              Alejar
+            </button>
+          </div>
+        </div>
+      </aside>
+
+      <div class="viewer-container">
+        <div id="viewer" aria-label="Visor 3D de la molécula {{ name }}" role="img"></div>
+        <div id="viewer-loading" class="loading-state" aria-live="polite" aria-label="Cargando molécula">
+          <div class="spinner"></div>
+          <p>Cargando molécula...</p>
+        </div>
+        <div id="viewer-error" class="error-state" role="alert" aria-live="assertive" style="display: none;"></div>
+      </div>
+    </main>
+
+    <script src="{% static 'molecules/js/fair-json.js' %}"></script>
+    <script>
+      // Variables globales para el script del visor
+      window.moleculeFileUrl = "{{ file_url }}";
+      window.moleculeFormat = "{{ format }}";
+      window.moleculeName = "{{ name|escapejs }}";
+      window.moleculeId = "{{ molecule_id }}";
+      window.moleculeFairJsonUrl = "{{ fair_json_url|default:'' }}";
+    </script>
+    <script src="{% static 'molecules/js/viewer.js' %}"></script>
+  </body>
+</html>
+
