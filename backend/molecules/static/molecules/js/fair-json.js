@@ -52,7 +52,12 @@
     for (var b = 0; b < bonds.length; b++) {
       var i1 = (bonds[b].i | 0) + 1;
       var i2 = (bonds[b].j | 0) + 1;
-      var order = Math.min(4, Math.max(1, bonds[b].order | 1));
+      // IMPORTANTE: no usar bitwise OR para el orden.
+      // Ej: 2 | 1 = 3 (doble → triple) y rompe la visualización.
+      var rawOrder = Number(bonds[b].order);
+      if (!isFinite(rawOrder) || rawOrder <= 0) rawOrder = 1;
+      // V2000: 1=simple, 2=doble, 3=triple, 4=aromático (igual que backend/schemas).
+      var order = Math.min(4, Math.max(1, Math.round(rawOrder)));
       lines.push(padRight(i1, 3) + padRight(i2, 3) + padRight(order, 3) + '  0  0  0  0');
     }
     lines.push('M  END');

@@ -23,3 +23,10 @@ def get_db():
 def molecules_collection():
     return get_db()["molecules"]
 
+
+def ensure_molecule_indexes() -> None:
+    """Índices para deduplicación por InChIKey y hash de archivo."""
+    coll = molecules_collection()
+    coll.create_index("inchikey", sparse=True)
+    coll.create_index("content_sha256", sparse=True)
+

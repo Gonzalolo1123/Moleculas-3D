@@ -1,16 +1,13 @@
-/**
- * Script para inicializar el visor 3D de moléculas con controles interactivos
- * Soporta formatos FAIR/MDDB y maneja la carga, errores y estados de visualización
- */
 (function() {
   'use strict';
 
   // Variables globales del visor
   let viewer = null;
-  let currentColorScheme = 'cpk';
+  let currentColorScheme = 'contrast';
   let currentBackground = 'black';
-  let atomScale = 0.30;
-  let bondRadius = 0.15;
+  // Valores por defecto ajustados para parecerse más a Avogadro
+  let atomScale = 0.40;
+  let bondRadius = 0.20;
   let displayModes = {
     ballStick: true,
     licorice: false,
@@ -46,6 +43,12 @@
 
   // Obtener elementos del DOM
   const viewerEl = document.getElementById('viewer');
+  const periodicTipEl = document.getElementById('atom-periodic-tooltip');
+  const periodicCardEl = document.getElementById('atom-periodic-card');
+  const tipNameEl = document.getElementById('atom-tip-el-name');
+  const tipZEl = document.getElementById('atom-tip-z');
+  const tipSymEl = document.getElementById('atom-tip-sym');
+  const tipMassEl = document.getElementById('atom-tip-mass');
   const loadingEl = document.getElementById('viewer-loading');
   const errorEl = document.getElementById('viewer-error');
   const controlsPanel = document.getElementById('viewer-controls');
@@ -85,6 +88,252 @@
     console.error('URL del archivo o FAIR JSON no proporcionada');
     showError('Error: No se proporcionó la URL del archivo ni FAIR JSON de la molécula.');
     return;
+  }
+
+  // Colores por elemento (alto contraste)
+  // Nota: CPK estándar deja C (gris) y H (blanco) muy similares; este modo
+  // ayuda a diferenciar claramente elementos en la primera entrega.
+  const ELEMENT_COLORS_CONTRAST = {
+    H: 0xffffff,
+    C: 0x00bcd4,
+    N: 0x2979ff,
+    O: 0xff1744,
+    F: 0x76ff03,
+    Cl: 0x00e676,
+    Br: 0xff6d00,
+    I: 0xaa00ff,
+    P: 0xff9100,
+    S: 0xffea00,
+  };
+
+  // Datos para leyenda tipo tabla periódica (IUPAC masas convencionales, 4 decimales en UI).
+  const ELEMENT_INFO = {
+    H: { name: 'Hidrógeno', z: 1, mass: 1.008 },
+    He: { name: 'Helio', z: 2, mass: 4.003 },
+    Li: { name: 'Litio', z: 3, mass: 6.94 },
+    Be: { name: 'Berilio', z: 4, mass: 9.012 },
+    B: { name: 'Boro', z: 5, mass: 10.81 },
+    C: { name: 'Carbono', z: 6, mass: 12.011 },
+    N: { name: 'Nitrógeno', z: 7, mass: 14.007 },
+    O: { name: 'Oxígeno', z: 8, mass: 15.999 },
+    F: { name: 'Flúor', z: 9, mass: 18.998 },
+    Ne: { name: 'Neón', z: 10, mass: 20.180 },
+    Na: { name: 'Sodio', z: 11, mass: 22.990 },
+    Mg: { name: 'Magnesio', z: 12, mass: 24.305 },
+    Al: { name: 'Aluminio', z: 13, mass: 26.982 },
+    Si: { name: 'Silicio', z: 14, mass: 28.085 },
+    P: { name: 'Fósforo', z: 15, mass: 30.974 },
+    S: { name: 'Azufre', z: 16, mass: 32.06 },
+    Cl: { name: 'Cloro', z: 17, mass: 35.45 },
+    Ar: { name: 'Argón', z: 18, mass: 39.95 },
+    K: { name: 'Potasio', z: 19, mass: 39.098 },
+    Ca: { name: 'Calcio', z: 20, mass: 40.078 },
+    Fe: { name: 'Hierro', z: 26, mass: 55.845 },
+    Cu: { name: 'Cobre', z: 29, mass: 63.546 },
+    Zn: { name: 'Zinc', z: 30, mass: 65.38 },
+    Br: { name: 'Bromo', z: 35, mass: 79.904 },
+    I: { name: 'Yodo', z: 53, mass: 126.904 }
+  };
+
+  // Colores CPK / tabla periódica (alineados con backend/molecules/fair_json.py).
+  const ELEMENT_CPK_BG = {
+    H: '#FFFFFF',
+    He: '#D9FFFF',
+    Li: '#CC80FF',
+    Be: '#C2FF00',
+    B: '#FFB5B5',
+    C: '#C8C8C8',
+    N: '#8F8FFF',
+    O: '#F00000',
+    F: '#90E050',
+    Ne: '#B3E3F5',
+    Na: '#AB5CF2',
+    Mg: '#8AFF00',
+    Al: '#BFA6A6',
+    Si: '#F0C8A0',
+    P: '#FF8000',
+    S: '#FFFF30',
+    Cl: '#1FF01F',
+    Ar: '#80D1E3',
+    K: '#8F40D4',
+    Ca: '#3DFF00',
+    Fe: '#E06633',
+    Cu: '#C88033',
+    Zn: '#7D80B0',
+    Br: '#A62929',
+    I: '#9400D3'
+  };
+
+  const CPK_DEFAULT_BG = '#B8B8B8';
+
+  function hexToRgb(hex) {
+    const h = hex.replace('#', '');
+    const n = parseInt(h, 16);
+    return { r: (n >> 16) & 255, g: (n >> 8) & 255, b: n & 255 };
+  }
+
+  /** Texto legible sobre fondo CPK (#0b1220 del sitio si el fondo es claro). */
+  function cpkForegroundAndBorder(bgHex) {
+    const rgb = hexToRgb(bgHex);
+    const lum = (0.2126 * rgb.r + 0.7152 * rgb.g + 0.0722 * rgb.b) / 255;
+    const darkText = '#0b1220';
+    const lightText = '#f8fafc';
+    const fg = lum > 0.72 ? darkText : lightText;
+    const borderSite = 'rgba(11, 18, 32, 0.95)';
+    const border = lum > 0.72 ? borderSite : 'rgba(226, 232, 240, 0.35)';
+    return { fg: fg, border: border };
+  }
+
+  function formatMassEs(mass) {
+    if (mass == null || mass === '') return '—';
+    return Number(mass).toLocaleString('es-CL', {
+      minimumFractionDigits: 3,
+      maximumFractionDigits: 3
+    });
+  }
+
+  function makeElementColorFunc() {
+    return function (atom) {
+      const e = (atom && atom.elem) ? String(atom.elem) : '';
+      return ELEMENT_COLORS_CONTRAST[e] || 0xc8c8c8;
+    };
+  }
+
+  function applyColorToStyle(styleObj) {
+    if (!styleObj) return;
+    if (currentColorScheme === 'default') return;
+
+    if (currentColorScheme === 'contrast') {
+      const fn = makeElementColorFunc();
+      Object.keys(styleObj).forEach((k) => {
+        styleObj[k].colorfunc = fn;
+        delete styleObj[k].colorscheme;
+      });
+      return;
+    }
+
+    Object.keys(styleObj).forEach((k) => {
+      styleObj[k].colorscheme = currentColorScheme;
+      delete styleObj[k].colorfunc;
+    });
+  }
+
+  function hidePeriodicAtomTip() {
+    if (periodicTipEl) {
+      periodicTipEl.hidden = true;
+    }
+  }
+
+  function showPeriodicAtomTip(atom) {
+    if (!periodicTipEl || !periodicCardEl) return;
+
+    var symbol = (atom && atom.elem) ? String(atom.elem).trim() : '?';
+    var info = ELEMENT_INFO[symbol] || null;
+    var z = (info && info.z) || atom.atomicnum;
+    var elementName = (info && info.name) || ('Elemento ' + symbol);
+    var mass = info ? info.mass : null;
+    var bg = ELEMENT_CPK_BG[symbol] || CPK_DEFAULT_BG;
+    var style = cpkForegroundAndBorder(bg);
+
+    if (tipNameEl) tipNameEl.textContent = elementName;
+    if (tipZEl) tipZEl.textContent = z != null ? String(z) : '—';
+    if (tipSymEl) tipSymEl.textContent = symbol || '?';
+    if (tipMassEl) tipMassEl.textContent = formatMassEs(mass);
+
+    periodicCardEl.style.backgroundColor = bg;
+    periodicCardEl.style.color = style.fg;
+    periodicCardEl.style.borderColor = style.border;
+    if (tipNameEl) tipNameEl.style.color = style.fg;
+    if (tipZEl) tipZEl.style.color = style.fg;
+    if (tipSymEl) tipSymEl.style.color = style.fg;
+    if (tipMassEl) tipMassEl.style.color = style.fg;
+
+    /* Posición fija vía CSS (.atom-periodic-tooltip: top/right 2cm). */
+    periodicTipEl.style.left = '';
+    periodicTipEl.style.top = '';
+
+    periodicTipEl.hidden = false;
+  }
+
+  /** Selección 3Dmol para un átomo concreto (serial PDB/SDF o índice). */
+  function atomSelectionFromAtom(atom) {
+    if (!atom) return null;
+    if (atom.serial != null && atom.serial !== '') {
+      return { serial: atom.serial };
+    }
+    if (typeof atom.index === 'number') {
+      return { index: atom.index };
+    }
+    return null;
+  }
+
+  /**
+   * Enfatiza el átomo bajo el cursor solo aumentando radios (sin cambiar color);
+   * reutiliza el mismo esquema de color que el resto de la molécula.
+   */
+  function applyHoverHighlight(atom) {
+    if (!viewer || !atom) return;
+    const sel = atomSelectionFromAtom(atom);
+    if (!sel) return;
+
+    const bump = 1.38;
+    const bumpStick = 1.22;
+    const h = {};
+
+    if (displayModes.vdw) {
+      h.sphere = { scale: 1.12 };
+    } else if (displayModes.ballStick) {
+      h.sphere = { radius: atomScale * bump };
+      let sr = bondRadius;
+      if (displayModes.licorice) sr = bondRadius * 1.5;
+      h.stick = { radius: sr * bumpStick };
+    } else if (displayModes.stick && !displayModes.vdw) {
+      h.stick = { radius: bondRadius * 1.32 };
+    } else {
+      h.sphere = { radius: atomScale * bump };
+      let sr = bondRadius;
+      if (displayModes.licorice) sr = bondRadius * 1.5;
+      h.stick = { radius: sr * bumpStick };
+    }
+
+    if (displayModes.wireframe) {
+      h.line = {};
+    }
+
+    if (Object.keys(h).length === 0) {
+      h.sphere = { radius: atomScale * bump };
+      h.stick = { radius: bondRadius * bumpStick };
+    }
+
+    applyColorToStyle(h);
+    if (currentColorScheme === 'default') {
+      Object.keys(h).forEach(function (k) {
+        h[k].colorscheme = 'default';
+      });
+    }
+
+    viewer.setStyle(sel, h);
+  }
+
+  function enableAtomHoverLabels() {
+    if (!viewer || !periodicTipEl) return;
+
+    viewer.setHoverable(
+      {},
+      true,
+      function (atom) {
+        if (!atom) return;
+        applyStyle();
+        applyHoverHighlight(atom);
+        showPeriodicAtomTip(atom);
+        viewer.render();
+      },
+      function () {
+        hidePeriodicAtomTip();
+        applyStyle();
+        viewer.render();
+      }
+    );
   }
 
   /**
@@ -146,18 +395,17 @@
     // Limpiar estilos previos y reaplicar
     viewer.setStyle({}, {});
     
-    const colorScheme = currentColorScheme !== 'default' ? currentColorScheme : 'cpk';
     const styleConfig = {};
 
     // Ball and Stick (esferas + varillas) - estilo principal de Avogadro
     if (displayModes.ballStick) {
       styleConfig.sphere = {
-        scale: atomScale,
-        colorscheme: colorScheme
+        // Usar radio fijo para evitar que elementos pesados (C) oculten el enlace
+        // más que H. Esto hace que los enlaces se perciban uniformes (estilo Avogadro).
+        radius: atomScale
       };
       styleConfig.stick = {
-        radius: bondRadius,
-        colorscheme: colorScheme
+        radius: bondRadius
       };
     }
 
@@ -165,8 +413,7 @@
     if (displayModes.licorice) {
       if (!styleConfig.stick) {
         styleConfig.stick = {
-          radius: bondRadius * 1.5,
-          colorscheme: colorScheme
+          radius: bondRadius * 1.5
         };
       } else {
         styleConfig.stick.radius = bondRadius * 1.5;
@@ -176,8 +423,8 @@
     // Van der Waals (esferas grandes con radios VdW)
     if (displayModes.vdw) {
       styleConfig.sphere = {
-        scale: 1.0,
-        colorscheme: colorScheme
+        // En modo VdW sí usamos radios relativos (VdW)
+        scale: 1.0
       };
       // Si vdw está activo, no mostrar sticks
       delete styleConfig.stick;
@@ -185,16 +432,13 @@
 
     // Wireframe (solo líneas) - se puede combinar
     if (displayModes.wireframe) {
-      styleConfig.line = {
-        colorscheme: colorScheme
-      };
+      styleConfig.line = {};
     }
 
     // Stick (solo varillas, sin esferas) - solo si ball-stick no está activo
     if (displayModes.stick && !displayModes.ballStick && !displayModes.vdw) {
       styleConfig.stick = {
-        radius: bondRadius,
-        colorscheme: colorScheme
+        radius: bondRadius
       };
       delete styleConfig.sphere;
     }
@@ -202,14 +446,15 @@
     // Si no hay ningún estilo activo, usar ball-and-stick por defecto
     if (Object.keys(styleConfig).length === 0) {
       styleConfig.sphere = {
-        scale: atomScale,
-        colorscheme: colorScheme
+        radius: atomScale
       };
       styleConfig.stick = {
-        radius: bondRadius,
-        colorscheme: colorScheme
+        radius: bondRadius
       };
     }
+
+    // Aplicar color al estilo (alto contraste, CPK u otros)
+    applyColorToStyle(styleConfig);
 
     // Aplicar el estilo combinado
     viewer.setStyle({}, styleConfig);
@@ -486,6 +731,7 @@
       // Aplicar estilos y configuración inicial
       applyStyle();
       applyBackground();
+      enableAtomHoverLabels();
       enhanceRendering();
       viewer.zoomTo();
       viewer.render();
@@ -539,3 +785,38 @@
   });
 
 })();
+
+/* ============================================
+   Selector de Temas (Claro / Oscuro)
+   ============================================ */
+   const themeSelect = document.getElementById('themeSelect');
+
+   function applyTheme(theme) {
+     if (theme === 'system') {
+       // Detecta la preferencia del sistema operativo
+       const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+       document.documentElement.setAttribute('data-theme', prefersDark ? 'dark' : 'light');
+     } else {
+       // Aplica el tema seleccionado manualmente
+       document.documentElement.setAttribute('data-theme', theme);
+     }
+     // Guarda la preferencia en el navegador
+     localStorage.setItem('user-theme', theme);
+     if (themeSelect) themeSelect.value = theme;
+   }
+   
+   // 1. Inicialización: Carga el tema guardado o fuerza 'light' por defecto (ideal para tus capturas)
+   const savedTheme = localStorage.getItem('user-theme') || 'light'; 
+   applyTheme(savedTheme);
+   
+   // 2. Función global para ser llamada desde el HTML (onchange)
+   window.changeTheme = function(theme) {
+     applyTheme(theme);
+   };
+   
+   // 3. Escucha en tiempo real si el usuario cambia el tema de su Windows/Mac
+   window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => {
+     if (localStorage.getItem('user-theme') === 'system') {
+       applyTheme('system');
+     }
+   });

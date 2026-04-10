@@ -506,6 +506,66 @@ body {
 }
 
 /* ============================================
+   Leyenda tipo tabla periódica (esquina superior derecha del visor)
+   ============================================ */
+.atom-periodic-tooltip {
+  position: absolute;
+  top: 2cm;
+  right: 2cm;
+  left: auto;
+  bottom: auto;
+  z-index: 50;
+  pointer-events: none;
+  width: 152px;
+  max-width: calc(100% - 4cm);
+  filter: drop-shadow(0 8px 20px rgba(0, 0, 0, 0.45));
+}
+
+.atom-periodic-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-start;
+  width: 100%;
+  min-height: 132px;
+  padding: 8px 10px 10px;
+  border-radius: 6px;
+  border: 3px solid #0b1220;
+  box-sizing: border-box;
+  font-family: system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif;
+  transition: background-color 120ms ease, color 120ms ease, border-color 120ms ease;
+}
+
+.atom-periodic-card__name {
+  font-size: 0.75rem;
+  font-weight: 800;
+  line-height: 1.15;
+  text-align: center;
+}
+
+.atom-periodic-card__z {
+  font-size: 0.72rem;
+  font-weight: 700;
+  margin-top: 2px;
+  opacity: 0.92;
+}
+
+.atom-periodic-card__sym {
+  font-size: 2.35rem;
+  font-weight: 900;
+  line-height: 1;
+  margin: 4px 0 2px;
+  letter-spacing: -0.02em;
+}
+
+.atom-periodic-card__mass {
+  font-size: 0.7rem;
+  font-weight: 700;
+  margin-top: auto;
+  opacity: 0.95;
+}
+
+/* ============================================
    Loading State
    ============================================ */
 .loading-state {

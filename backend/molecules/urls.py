@@ -6,6 +6,7 @@ from . import views
 urlpatterns = [
     # Web home
     path("", views.index, name="home"),
+    path("carga-masiva/", views.bulk_load, name="bulk_load"),
     # Web CRUD (mínimo)
     path("crud/delete/<str:molecule_id>/", views.web_delete, name="web_delete"),
     # API

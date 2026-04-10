@@ -14,9 +14,28 @@
     <script defer src="{% static 'molecules/js/index.js' %}"></script>
   </head>
   <body>
+
     <header role="banner">
-      <h1 class="header-title">Moléculas 3D</h1>
-      <p class="hint">Sube un archivo (CML de Avogadro, o PDB/SDF/MOL/XYZ) y visualiza la molécula en 3D.</p>
+      <div class="header-row">
+        <div class="header-text">
+          <h1 class="header-title">Moléculas 3D</h1>
+          <p class="hint">Sube un archivo (CML de Avogadro, o PDB/SDF/MOL/XYZ) y visualiza la molécula en 3D.</p>
+        </div>
+        
+        <div style="display: flex; align-items: center; gap: 16px; flex-wrap: wrap;">
+          
+          <div style="display: flex; align-items: center; gap: 8px;">
+            <label for="themeSelect" style="margin: 0; font-weight: 600; color: var(--text-secondary);">Tema:</label>
+            <select id="themeSelect" onchange="changeTheme(this.value)" style="width: auto; padding: 6px 32px 6px 12px; font-size: 0.85rem; border-radius: var(--radius-sm); background: var(--bg-input); color: var(--text-primary);">
+              <option value="system">🖥️ Sistema</option>
+              <option value="light">☀️ Claro</option>
+              <option value="dark">🌙 Oscuro</option>
+            </select>
+          </div>
+
+          <a href="/carga-masiva/" class="btn-bulk">Carga masiva</a>
+        </div>
+      </div>
     </header>
     <main class="grid" role="main">
       <section class="card" aria-labelledby="upload-title">
@@ -26,10 +45,18 @@
         </div>
 
         {% if created_id %}
+          {% if duplicate %}
+          <div class="notice-dup" role="status" aria-live="polite">
+            <strong>No se creó un registro nuevo:</strong> esa molécula ya estaba en el sistema (mismo InChIKey o mismo archivo).
+            Abrir la existente:
+            <a href="/viewer/{{ created_id }}/" aria-label="Abrir visor de molécula {{ created_id }}">/viewer/{{ created_id }}/</a>
+          </div>
+          {% else %}
           <div class="ok" role="alert" aria-live="polite">
             <strong>¡Subida exitosa!</strong> Abrir visor:
             <a href="/viewer/{{ created_id }}/" aria-label="Abrir visor de molécula {{ created_id }}">/viewer/{{ created_id }}/</a>
           </div>
+          {% endif %}
         {% endif %}
 
         <form method="post" enctype="multipart/form-data" class="form-container" id="upload-form" aria-label="Formulario de subida de molécula">
@@ -148,6 +175,34 @@
         </div>
       </section>
     </main>
+    <script>
+      const themeSelect = document.getElementById('themeSelect');
+
+      function applyTheme(theme) {
+        if (theme === 'system') {
+          const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+          document.documentElement.setAttribute('data-theme', prefersDark ? 'dark' : 'light');
+        } else {
+          document.documentElement.setAttribute('data-theme', theme);
+        }
+        localStorage.setItem('user-theme', theme);
+        if (themeSelect) themeSelect.value = theme;
+      }
+
+      // 1. Iniciar con el tema Claro por defecto para tu captura
+      const savedTheme = localStorage.getItem('user-theme') || 'light';
+      applyTheme(savedTheme);
+
+      // 2. Hacer la función global para que funcione el 'onchange'
+      window.changeTheme = function(theme) {
+        applyTheme(theme);
+      };
+
+      // 3. Escuchar al sistema operativo
+      window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => {
+        if (localStorage.getItem('user-theme') === 'system') applyTheme('system');
+      });
+    </script>
   </body>
 </html>
 
