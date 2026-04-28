@@ -10,7 +10,13 @@ from typing import Any
 from django.conf import settings
 from django.utils import timezone
 
-from .chem_identifiers import try_inchikey_from_bytes, try_inchikey_from_fair_dict
+from .chem_identifiers import (
+    try_inchikey_from_bytes,
+    try_inchikey_from_fair_dict,
+    try_smiles_from_bytes,
+    try_smiles_from_fair_dict,
+)
+from .conformer_labels import normalize_conformer_custom, normalize_conformer_type
 from .fair_json import cml_to_fair_json_normalized, fair_json_to_json_string, validate_fair_molecule
 from .mongo import molecules_collection
 
@@ -31,13 +37,9 @@ def _content_sha256(raw: bytes) -> str:
     return hashlib.sha256(raw).hexdigest()
 
 
-def _find_duplicate(inchikey: str | None, content_sha256: str) -> dict[str, Any] | None:
-    coll = molecules_collection()
-    if inchikey:
-        doc = coll.find_one({"inchikey": inchikey})
-        if doc:
-            return doc
-    return coll.find_one({"content_sha256": content_sha256})
+def _find_duplicate(content_sha256: str) -> dict[str, Any] | None:
+    """Solo mismo contenido binario; el mismo InChIKey puede tener varias conformaciones."""
+    return molecules_collection().find_one({"content_sha256": content_sha256})
 
 
 def persist_molecule(
@@ -45,13 +47,15 @@ def persist_molecule(
     original_filename: str,
     raw: bytes,
     fmt: str | None = None,
+    conformer_type: str | None = None,
+    conformer_custom_label: str | None = None,
 ) -> tuple[str, dict[str, Any]]:
     """
     Escribe archivo en MEDIA, genera FAIR JSON si aplica (CML), inserta en Mongo.
-    Dedup: primero por InChIKey (si se calcula); si no, por SHA-256 del archivo.
+    Dedup: solo por SHA-256 del archivo (varias filas pueden compartir InChIKey).
 
     Devuelve (object_id_str, info) con claves id, name, format, file_path,
-    duplicate (bool), dedup (inchikey|content_sha256|None), inchikey (opcional).
+    duplicate (bool), dedup (content_sha256|None), inchikey (opcional), conformer_type.
     """
     if not fmt:
         fmt = safe_ext(original_filename)
@@ -60,6 +64,7 @@ def persist_molecule(
 
     fair_doc: dict[str, Any] | None = None
     inchikey_val: str | None = None
+    smiles_val: str | None = None
 
     if safe_extension == "cml" or fmt == "cml":
         cml_text = raw.decode("utf-8", errors="replace")
@@ -76,28 +81,34 @@ def persist_molecule(
                 inchikey_val = try_inchikey_from_fair_dict(fair_doc)
                 if inchikey_val:
                     fair_doc.setdefault("metadata", {})["inchikey"] = inchikey_val
+                smiles_val = try_smiles_from_fair_dict(fair_doc)
         except Exception as e:
             print(f"Error preparando FAIR/InChI desde CML: {e}")
 
     if inchikey_val is None:
         inchikey_val = try_inchikey_from_bytes(raw, safe_extension)
+    if smiles_val is None:
+        smiles_val = try_smiles_from_bytes(raw, safe_extension)
 
-    existing = _find_duplicate(inchikey_val, content_sha256)
+    ct_norm = normalize_conformer_type(conformer_type)
+    cc_norm = normalize_conformer_custom(conformer_custom_label)
+    if ct_norm != "other":
+        cc_norm = ""
+
+    existing = _find_duplicate(content_sha256)
     if existing:
         oid = str(existing["_id"])
-        reason = (
-            "inchikey"
-            if inchikey_val and existing.get("inchikey") == inchikey_val
-            else "content_sha256"
-        )
         return oid, {
             "id": oid,
             "name": existing.get("name") or name,
             "format": existing.get("format") or fmt,
             "file_path": existing.get("file_path"),
             "duplicate": True,
-            "dedup": reason,
+            "dedup": "content_sha256",
             "inchikey": inchikey_val or existing.get("inchikey"),
+            "smiles": existing.get("smiles") or smiles_val,
+            "conformer_type": existing.get("conformer_type") or "unspecified",
+            "conformer_custom_label": existing.get("conformer_custom_label") or "",
         }
 
     os.makedirs(settings.MEDIA_ROOT, exist_ok=True)
@@ -131,9 +142,13 @@ def persist_molecule(
         "size_bytes": int(len(raw)),
         "created_at": timezone.now(),
         "content_sha256": content_sha256,
+        "conformer_type": ct_norm,
+        "conformer_custom_label": cc_norm,
     }
     if inchikey_val:
         doc["inchikey"] = inchikey_val
+    if smiles_val:
+        doc["smiles"] = smiles_val
     if fair_json_path is not None:
         doc["fair_json_path"] = fair_json_path
 
@@ -147,4 +162,7 @@ def persist_molecule(
         "duplicate": False,
         "dedup": None,
         "inchikey": inchikey_val,
+        "smiles": smiles_val,
+        "conformer_type": ct_norm,
+        "conformer_custom_label": cc_norm,
     }

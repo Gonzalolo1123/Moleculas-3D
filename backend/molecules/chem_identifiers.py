@@ -13,6 +13,7 @@ from typing import Any
 try:
     from rdkit import Chem
     from rdkit.Chem.inchi import MolToInchiKey
+    from rdkit.Chem.rdmolfiles import MolToSmiles
 
     _RDKIT = True
 except ImportError:
@@ -34,6 +35,18 @@ def inchikey_from_mol(mol: Any) -> str | None:
         key = MolToInchiKey(mol)
         if key and INCHIKEY_PATTERN.match(key):
             return key
+    except Exception:
+        pass
+    return None
+
+
+def smiles_from_mol(mol: Any) -> str | None:
+    if not _RDKIT or mol is None:
+        return None
+    try:
+        smi = MolToSmiles(mol, canonical=True)
+        if smi:
+            return smi
     except Exception:
         pass
     return None
@@ -130,6 +143,10 @@ def try_inchikey_from_fair_dict(fair: dict[str, Any]) -> str | None:
     return inchikey_from_mol(mol_from_fair_dict(fair))
 
 
+def try_smiles_from_fair_dict(fair: dict[str, Any]) -> str | None:
+    return smiles_from_mol(mol_from_fair_dict(fair))
+
+
 def try_inchikey_from_bytes(raw: bytes, ext: str) -> str | None:
     """
     Intenta obtener InChIKey según extensión. None si RDKit no está o no aplica.
@@ -150,6 +167,31 @@ def try_inchikey_from_bytes(raw: bytes, ext: str) -> str | None:
             data = json.loads(text)
             if isinstance(data, dict) and "geometry" in data and "topology" in data:
                 return try_inchikey_from_fair_dict(data)
+        except (json.JSONDecodeError, TypeError):
+            return None
+    return None
+
+
+def try_smiles_from_bytes(raw: bytes, ext: str) -> str | None:
+    """
+    Intenta obtener SMILES canónico según extensión. None si RDKit no está o no aplica.
+    """
+    if not _RDKIT or not raw:
+        return None
+    ext = ext.lower().strip(".")
+    text = raw.decode("utf-8", errors="replace")
+
+    if ext == "sdf":
+        return smiles_from_mol(mol_from_sdf_bytes(raw))
+    if ext in ("mol", "mdl"):
+        return smiles_from_mol(mol_from_mol_block_text(text))
+    if ext == "pdb":
+        return smiles_from_mol(mol_from_pdb_text(text))
+    if ext == "json":
+        try:
+            data = json.loads(text)
+            if isinstance(data, dict) and "geometry" in data and "topology" in data:
+                return try_smiles_from_fair_dict(data)
         except (json.JSONDecodeError, TypeError):
             return None
     return None

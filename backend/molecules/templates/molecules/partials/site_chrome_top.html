@@ -1,0 +1,115 @@
+<header class="site-header" role="banner">
+  <div class="page-shell header-inner">
+    <div class="hero">
+      <div class="hero-text">
+        <h1 class="header-title">Moléculas 3D</h1>
+        <p class="hint hero-tagline">
+          Visualiza y comparte estructuras moleculares 3D. Importa, busca y gestiona moléculas.
+        </p>
+      </div>
+      <div class="hero-actions" aria-label="Apariencia, vistas por rol y notificaciones">
+        <span class="hero-actions-label">Apariencia</span>
+        <div class="hero-actions-row">
+          <div
+            class="theme-segmented"
+            id="theme-segmented"
+            role="radiogroup"
+            aria-label="Tema de la interfaz"
+          >
+            <button type="button" class="theme-segment" role="radio" aria-checked="false" data-theme-value="system" id="theme-system">
+              Sistema
+            </button>
+            <button type="button" class="theme-segment" role="radio" aria-checked="false" data-theme-value="light" id="theme-light">
+              Claro
+            </button>
+            <button type="button" class="theme-segment" role="radio" aria-checked="false" data-theme-value="dark" id="theme-dark">
+              Oscuro
+            </button>
+          </div>
+          <nav class="hero-role-icons" aria-label="Cambiar vista por rol (demo)">
+            <a
+              href="{% url 'home' %}"
+              class="role-icon-btn{% if active_role == 'admin' %} role-icon-btn--active{% endif %}"
+              title="Administración — carga, borrado y gestión completa del catálogo"
+              aria-label="Administración"
+              {% if active_role == 'admin' %}aria-current="page"{% endif %}
+            >
+              <svg class="role-icon-svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" stroke-linecap="round" stroke-linejoin="round" />
+              </svg>
+            </a>
+            <a
+              href="{% url 'role_professor' %}"
+              class="role-icon-btn{% if active_role == 'professor' %} role-icon-btn--active{% endif %}"
+              title="Profesor — planificación por materias y búsqueda para clases"
+              aria-label="Vista profesor"
+              {% if active_role == 'professor' %}aria-current="page"{% endif %}
+            >
+              <svg class="role-icon-svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                <path d="M4 19h16" stroke-linecap="round" />
+                <path d="M4 15l3-9h10l3 9" stroke-linecap="round" stroke-linejoin="round" />
+                <path d="M9 22h6" stroke-linecap="round" />
+              </svg>
+            </a>
+            <a
+              href="{% url 'role_student' %}"
+              class="role-icon-btn{% if active_role == 'student' %} role-icon-btn--active{% endif %}"
+              title="Estudiantes — biblioteca, favoritos y carpetas (demo)"
+              aria-label="Vista estudiantes"
+              {% if active_role == 'student' %}aria-current="page"{% endif %}
+            >
+              <svg class="role-icon-svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                <path d="M4 19.5c0 .8.7 1.5 1.5 1.5H8V5H5.5C4.7 5 4 5.7 4 6.5v13zM20 19.5c0 .8-.7 1.5-1.5 1.5H16V5h2.5c.8 0 1.5.7 1.5 1.5v13z" stroke-linejoin="round" />
+                <path d="M8 5v14l4-2 4 2V5" stroke-linejoin="round" />
+              </svg>
+            </a>
+          </nav>
+          <button
+            type="button"
+            class="notif-bell-btn"
+            id="notif-bell-btn"
+            aria-label="Notificaciones de importación"
+            aria-expanded="false"
+            aria-controls="notif-panel"
+            title="Notificaciones — resumen de la última importación"
+          >
+            <svg class="notif-bell-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+              <path
+                d="M18 8A6 6 0 0 0 6 8c0 7-3 7-3 14h18c0-7-3-7-3-14"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              />
+              <path d="M13.73 21a2 2 0 0 1-3.46 0" stroke="currentColor" stroke-width="2" stroke-linecap="round" />
+            </svg>
+            <span class="notif-bell-badge" id="notif-bell-badge" hidden aria-hidden="true">0</span>
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+</header>
+{% if bulk_results %}
+  {{ bulk_results|json_script:"bulk-results-payload" }}
+{% endif %}
+<div id="toast-stack" class="toast-stack" aria-live="polite" aria-relevant="additions text"></div>
+<div id="notif-backdrop" class="notif-backdrop" hidden aria-hidden="true"></div>
+<div
+  id="notif-panel"
+  class="notif-panel"
+  role="dialog"
+  aria-modal="true"
+  aria-labelledby="notif-panel-title"
+  hidden
+>
+  <div class="notif-panel-header">
+    <h2 id="notif-panel-title" class="notif-panel-title">Importación</h2>
+    <button type="button" class="notif-panel-close" id="notif-panel-close" aria-label="Cerrar">×</button>
+  </div>
+  <p id="notif-panel-lead" class="notif-panel-lead">
+    Resumen de archivos procesados. El botón <strong>Ver</strong> abre el visor cuando la estructura está disponible.
+  </p>
+  <ul id="notif-panel-list" class="notif-panel-list"></ul>
+  <p id="notif-panel-empty" class="notif-panel-empty">No hay notificaciones de importación en esta visita.</p>
+</div>

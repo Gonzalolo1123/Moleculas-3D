@@ -1,0 +1,107 @@
+{% extends "molecules/base_role.html" %}
+{% load static %}
+{% block title %}Profesor · Moléculas 3D{% endblock %}
+{% block role_content %}
+  <section class="card role-intro-card" aria-labelledby="prof-intro-title">
+    <h2 id="prof-intro-title" class="section-title">Planificación docente</h2>
+    <p class="field-hint role-intro-text">
+      Propuesta de interfaz: el profesor planifica clases por materias y realiza búsquedas en el catálogo.
+    </p>
+  </section>
+
+  <div class="role-layout">
+    <aside class="card role-aside" aria-labelledby="units-title">
+      <h2 id="units-title" class="section-title">Materias / unidades</h2>
+      <p class="field-hint">Lista orientativa (demo). En producción el profesor crearía y ordenaría sus unidades.</p>
+      <ul class="role-unit-list" id="prof-unit-list">
+        <li>
+          <button
+            type="button"
+            class="role-unit-chip role-unit-chip--active"
+            data-subject=""
+            aria-pressed="true"
+          >
+            Todas las materias
+          </button>
+        </li>
+        {% for s in demo_subject_list %}
+          <li><button type="button" class="role-unit-chip" data-subject="{{ s }}" aria-pressed="false">{{ s }}</button></li>
+        {% endfor %}
+      </ul>
+      <button type="button" class="btn-secondary role-mock-btn" id="prof-mock-new-unit">+ Nueva unidad (demo)</button>
+    </aside>
+
+    <div class="role-main-stack">
+      <section class="card" aria-labelledby="catalog-title">
+        <div class="section-header">
+          <h2 id="catalog-title" class="section-title">Catálogo para clases</h2>
+          <span class="pill pill-api">Solo lectura</span>
+        </div>
+        <div class="role-toolbar">
+          <label class="sr-only" for="prof-filter-q">Buscar moléculas</label>
+          <input
+            type="search"
+            id="prof-filter-q"
+            class="input-text-themed role-toolbar-search"
+            placeholder="Buscar por nombre…"
+            autocomplete="off"
+          />
+          <label class="sr-only" for="prof-filter-subject">Filtrar por materia</label>
+          <select id="prof-filter-subject" class="input-select-themed role-toolbar-select">
+            <option value="">Todas las materias</option>
+            {% for s in demo_subject_list %}
+              <option value="{{ s }}">{{ s }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="table-scroll table-container">
+          <table class="role-data-table" id="prof-molecule-table" role="table" aria-label="Moléculas filtrables">
+            <thead>
+              <tr>
+                <th scope="col" class="th-name">Nombre</th>
+                <th scope="col">Materia (demo)</th>
+                <th scope="col" class="th-format">Formato</th>
+                <th scope="col" class="th-date">Fecha</th>
+                <th scope="col" class="actions-col">Acciones</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for m in items %}
+                <tr
+                  class="prof-mol-row"
+                  data-name="{{ m.name|default:''|lower }}"
+                  data-subject="{{ m.demo_subject }}"
+                >
+                  <td data-label="Nombre" class="td-name">{{ m.name|capfirst }}</td>
+                  <td data-label="Materia"><span class="pill pill-db">{{ m.demo_subject }}</span></td>
+                  <td data-label="Formato"><span class="format-badge">{{ m.format|upper }}</span></td>
+                  <td data-label="Fecha" class="cell-date">
+                    {% if m.created_at %}{{ m.created_at|date:"d/m/Y H:i" }}{% else %}—{% endif %}
+                  </td>
+                  <td data-label="Acciones" class="actions-cell">
+                    <div class="action-buttons" role="group">
+                      <a href="/viewer/{{ m.id }}/" class="btn-outline">Ver</a>
+                      <a href="/api/molecules/{{ m.id }}/file/" class="btn-outline" download>Archivo</a>
+                      <button type="button" class="btn-secondary role-mock-btn" title="Demo: asignar a unidad de clase">Asignar…</button>
+                    </div>
+                  </td>
+                </tr>
+              {% empty %}
+                <tr>
+                  <td colspan="5" class="empty-state">
+                    <p class="empty-title">No hay moléculas en el catálogo</p>
+                    <p class="hint">El administrador puede importarlas desde <a href="{% url 'home' %}">Administración</a>.</p>
+                  </td>
+                </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </section>
+    </div>
+  </div>
+{% endblock %}
+{% block extra_scripts %}
+  {{ block.super }}
+  <script defer src="{% static 'molecules/js/role-professor.js' %}"></script>
+{% endblock %}

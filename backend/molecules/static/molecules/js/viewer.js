@@ -1,20 +1,27 @@
 (function() {
   'use strict';
 
+  /** Fondo 3D por defecto según `data-theme` (heredado del índice vía localStorage + script en head). */
+  function backgroundKeyFromUiTheme() {
+    return document.documentElement.getAttribute('data-theme') === 'light' ? 'white' : 'black';
+  }
+
+  function backgroundHexFromSelectValue(val) {
+    if (val === '0x0b1220') return 0x0b1220;
+    if (val === '0xffffff') return 0xffffff;
+    if (val === 'black') return 0x000000;
+    return 0xffffff;
+  }
+
   // Variables globales del visor
   let viewer = null;
   let currentColorScheme = 'contrast';
-  let currentBackground = 'black';
+  let currentBackground = backgroundKeyFromUiTheme();
   // Valores por defecto ajustados para parecerse más a Avogadro
   let atomScale = 0.40;
   let bondRadius = 0.20;
-  let displayModes = {
-    ballStick: true,
-    licorice: false,
-    vdw: false,
-    wireframe: false,
-    stick: false
-  };
+  /** Un solo modo: ballStick | licorice | vdw | wireframe | stick */
+  let displayMode = 'ballStick';
 
   // Formatos soportados FAIR/MDDB
   const FAIR_FORMATS = {
@@ -55,11 +62,6 @@
   const toggleControlsBtn = document.getElementById('toggle-controls');
   const openControlsBtn = document.getElementById('btn-open-controls');
   const controlsContent = document.getElementById('controls-content');
-  const displayBallStick = document.getElementById('display-ball-stick');
-  const displayLicorice = document.getElementById('display-licorice');
-  const displayVdw = document.getElementById('display-vdw');
-  const displayWireframe = document.getElementById('display-wireframe');
-  const displayStick = document.getElementById('display-stick');
   const displayAxes = document.getElementById('display-axes');
   const colorSelect = document.getElementById('color-scheme');
   const atomScaleSlider = document.getElementById('atom-scale');
@@ -70,6 +72,22 @@
   const resetViewBtn = document.getElementById('btn-reset-view');
   const zoomInBtn = document.getElementById('btn-zoom-in');
   const zoomOutBtn = document.getElementById('btn-zoom-out');
+
+  if (backgroundSelect) {
+    backgroundSelect.value = currentBackground;
+  }
+
+  const checkedDisplayMode = document.querySelector('input[name="display-mode"]:checked');
+  if (checkedDisplayMode && checkedDisplayMode.value) {
+    displayMode = checkedDisplayMode.value;
+  }
+
+  window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', function () {
+    if ((localStorage.getItem('user-theme') || 'system') !== 'system') return;
+    currentBackground = backgroundKeyFromUiTheme();
+    if (backgroundSelect) backgroundSelect.value = currentBackground;
+    if (viewer) applyBackground();
+  });
 
   // Validar que los elementos existan
   if (!viewerEl) {
@@ -82,7 +100,176 @@
   const fairJsonUrl = window.moleculeFairJsonUrl || '';
   const format = (window.moleculeFormat || 'sdf').toLowerCase();
   const moleculeName = window.moleculeName || 'molécula';
+  const moleculeId = window.moleculeId || '';
+  const moleculeSmiles = window.moleculeSmiles || '';
+  const moleculeConformerType = (window.moleculeConformerType || 'unspecified').toLowerCase();
   const useFairJson = !!fairJsonUrl && typeof fairJsonToSdf === 'function';
+
+  function getCsrfToken() {
+    const m = document.cookie.match(/(?:^|;\s*)csrftoken=([^;]+)/);
+    return m ? decodeURIComponent(m[1]) : '';
+  }
+
+  function compactConformerLabel(label) {
+    if (!label) return 'Sin especificar';
+    const clean = String(label).trim();
+    if (!clean) return 'Sin especificar';
+    if (clean.toLowerCase().startsWith('sin especificar')) return 'Sin especificar (unspecified)';
+    return clean;
+  }
+
+  function maybeEnableQuickStructureEdit() {
+    const btn = document.getElementById('btn-edit-structure');
+    if (!btn) return;
+    if (moleculeConformerType !== 'unspecified') return;
+    btn.hidden = false;
+    btn.addEventListener('click', function () {
+      if (typeof Swal === 'undefined' || !Swal.fire) return;
+      Swal.fire({
+        title: 'Asignar estructura',
+        input: 'select',
+        inputOptions: {
+          chair: 'Silla (chair)',
+          boat: 'Barco (boat)',
+          twist_boat: 'Barco retorcido (twist-boat)',
+          half_chair: 'Media silla (half-chair)',
+          envelope: 'Sobre (envelope)',
+          planar: 'Plana (planar)',
+          other: 'Otra (other, especificar)'
+        },
+        inputPlaceholder: 'Selecciona una estructura',
+        showCancelButton: true,
+        confirmButtonText: 'Guardar',
+        cancelButtonText: 'Cancelar',
+        preConfirm: function (selectedType) {
+          if (!selectedType) {
+            Swal.showValidationMessage('Selecciona una estructura.');
+            return false;
+          }
+          if (selectedType !== 'other') {
+            return { conformer_type: selectedType, conformer_custom_label: '' };
+          }
+          return Swal.fire({
+            title: 'Nombre de la estructura',
+            input: 'text',
+            inputPlaceholder: 'Ej: Twist-chair',
+            showCancelButton: true,
+            confirmButtonText: 'Usar',
+            cancelButtonText: 'Cancelar',
+            preConfirm: function (txt) {
+              const val = (txt || '').trim();
+              if (!val) {
+                Swal.showValidationMessage('Escribe el nombre de la estructura.');
+                return false;
+              }
+              return { conformer_type: 'other', conformer_custom_label: val };
+            }
+          }).then(function (res) {
+            return res.isConfirmed ? res.value : false;
+          });
+        }
+      }).then(function (res) {
+        if (!res.isConfirmed || !res.value) return;
+        fetch('/api/molecules/' + encodeURIComponent(moleculeId) + '/', {
+          method: 'PATCH',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': getCsrfToken()
+          },
+          body: JSON.stringify(res.value)
+        }).then(function (r) {
+          if (!r.ok) throw new Error('patch');
+          window.location.reload();
+        }).catch(function () {
+          Swal.fire('Error', 'No se pudo actualizar la estructura.', 'error');
+        });
+      });
+    });
+  }
+
+  function initCopySmiles() {
+    const btn = document.getElementById('copy-smiles-btn');
+    if (!btn || !moleculeSmiles) return;
+    btn.addEventListener('click', function () {
+      if (!navigator.clipboard) return;
+      navigator.clipboard.writeText(moleculeSmiles).then(function () {
+        const old = btn.textContent;
+        btn.textContent = 'Copiado';
+        setTimeout(function () {
+          btn.textContent = old || 'Copiar';
+        }, 1100);
+      });
+    });
+  }
+
+  /**
+   * Variantes con el mismo InChIKey: lista desplegable → otra ruta /viewer/:id/
+   */
+  function initConformerSwitcher() {
+    const sel = document.getElementById('conformer-select');
+    if (!sel || !moleculeId) return;
+
+    sel.innerHTML = '';
+
+    fetch('/api/molecules/' + encodeURIComponent(moleculeId) + '/conformers/')
+      .then(function (response) {
+        if (!response.ok) throw new Error('conformers');
+        return response.json();
+      })
+      .then(function (data) {
+        const variants = (data && data.variants) ? data.variants : [];
+        if (variants.length === 0) {
+          const only = document.createElement('option');
+          only.value = moleculeId;
+          only.textContent = compactConformerLabel(window.moleculeConformerLabel || 'Sin especificar');
+          only.selected = true;
+          sel.appendChild(only);
+          return;
+        }
+
+        // Si hay varias estructuras y existe "silla", usarla como predeterminada.
+        const chairVariant = variants.find(function (v) {
+          return String(v.conformer_type || '').toLowerCase() === 'chair';
+        });
+        if (variants.length > 1 && chairVariant && chairVariant.id && chairVariant.id !== moleculeId) {
+          window.location.replace('/viewer/' + encodeURIComponent(chairVariant.id) + '/');
+          return;
+        }
+
+        variants.forEach(function (v) {
+          const opt = document.createElement('option');
+          opt.value = v.id;
+          var lab = compactConformerLabel(v.conformer_label || '');
+          var nm = (v.name || '').trim();
+          var isUnspecified = (lab || '').toLowerCase().indexOf('sin especificar') === 0;
+          if (isUnspecified && nm) {
+            opt.textContent = 'Sin especificar (' + nm + ')';
+          } else {
+            opt.textContent = lab || 'Sin especificar (unspecified)';
+          }
+          opt.title = nm && lab ? (lab + ' — ' + nm) : (lab || nm || 'Estructura');
+          if (v.id === moleculeId) opt.selected = true;
+          sel.appendChild(opt);
+        });
+        sel.addEventListener('change', function () {
+          var nextId = sel.value;
+          if (nextId && nextId !== moleculeId) {
+            window.location.href = '/viewer/' + encodeURIComponent(nextId) + '/';
+          }
+        });
+      })
+      .catch(function () {
+        const fallback = document.createElement('option');
+        fallback.value = moleculeId;
+        fallback.textContent = compactConformerLabel(window.moleculeConformerLabel || 'Sin especificar');
+        fallback.selected = true;
+        sel.appendChild(fallback);
+      });
+  }
+
+  initConformerSwitcher();
+  maybeEnableQuickStructureEdit();
+  initCopySmiles();
 
   if (!fileUrl && !fairJsonUrl) {
     console.error('URL del archivo o FAIR JSON no proporcionada');
@@ -280,27 +467,18 @@
     const bumpStick = 1.22;
     const h = {};
 
-    if (displayModes.vdw) {
-      h.sphere = { scale: 1.12 };
-    } else if (displayModes.ballStick) {
-      h.sphere = { radius: atomScale * bump };
-      let sr = bondRadius;
-      if (displayModes.licorice) sr = bondRadius * 1.5;
-      h.stick = { radius: sr * bumpStick };
-    } else if (displayModes.stick && !displayModes.vdw) {
-      h.stick = { radius: bondRadius * 1.32 };
-    } else {
-      h.sphere = { radius: atomScale * bump };
-      let sr = bondRadius;
-      if (displayModes.licorice) sr = bondRadius * 1.5;
-      h.stick = { radius: sr * bumpStick };
-    }
-
-    if (displayModes.wireframe) {
+    if (displayMode === 'wireframe') {
       h.line = {};
-    }
-
-    if (Object.keys(h).length === 0) {
+    } else if (displayMode === 'vdw') {
+      h.sphere = { scale: 1.12 };
+    } else if (displayMode === 'ballStick') {
+      h.sphere = { radius: atomScale * bump };
+      h.stick = { radius: bondRadius * bumpStick };
+    } else if (displayMode === 'stick') {
+      h.stick = { radius: bondRadius * 1.32 };
+    } else if (displayMode === 'licorice') {
+      h.stick = { radius: bondRadius * 1.5 * bumpStick };
+    } else {
       h.sphere = { radius: atomScale * bump };
       h.stick = { radius: bondRadius * bumpStick };
     }
@@ -387,70 +565,36 @@
   }
 
   /**
-   * Aplica los estilos de representación seleccionados (múltiples simultáneos como Avogadro)
+   * Aplica un único modo de representación (radios mutuamente excluyentes).
    */
   function applyStyle() {
     if (!viewer) return;
 
     // Limpiar estilos previos y reaplicar
     viewer.setStyle({}, {});
-    
+
     const styleConfig = {};
 
-    // Ball and Stick (esferas + varillas) - estilo principal de Avogadro
-    if (displayModes.ballStick) {
-      styleConfig.sphere = {
-        // Usar radio fijo para evitar que elementos pesados (C) oculten el enlace
-        // más que H. Esto hace que los enlaces se perciban uniformes (estilo Avogadro).
-        radius: atomScale
-      };
-      styleConfig.stick = {
-        radius: bondRadius
-      };
-    }
-
-    // Licorice (varillas más gruesas) - se combina con ball-stick si está activo
-    if (displayModes.licorice) {
-      if (!styleConfig.stick) {
-        styleConfig.stick = {
-          radius: bondRadius * 1.5
-        };
-      } else {
-        styleConfig.stick.radius = bondRadius * 1.5;
-      }
-    }
-
-    // Van der Waals (esferas grandes con radios VdW)
-    if (displayModes.vdw) {
-      styleConfig.sphere = {
-        // En modo VdW sí usamos radios relativos (VdW)
-        scale: 1.0
-      };
-      // Si vdw está activo, no mostrar sticks
-      delete styleConfig.stick;
-    }
-
-    // Wireframe (solo líneas) - se puede combinar
-    if (displayModes.wireframe) {
-      styleConfig.line = {};
-    }
-
-    // Stick (solo varillas, sin esferas) - solo si ball-stick no está activo
-    if (displayModes.stick && !displayModes.ballStick && !displayModes.vdw) {
-      styleConfig.stick = {
-        radius: bondRadius
-      };
-      delete styleConfig.sphere;
-    }
-
-    // Si no hay ningún estilo activo, usar ball-and-stick por defecto
-    if (Object.keys(styleConfig).length === 0) {
-      styleConfig.sphere = {
-        radius: atomScale
-      };
-      styleConfig.stick = {
-        radius: bondRadius
-      };
+    switch (displayMode) {
+      case 'ballStick':
+        styleConfig.sphere = { radius: atomScale };
+        styleConfig.stick = { radius: bondRadius };
+        break;
+      case 'licorice':
+        styleConfig.stick = { radius: bondRadius * 1.5 };
+        break;
+      case 'vdw':
+        styleConfig.sphere = { scale: 1.0 };
+        break;
+      case 'wireframe':
+        styleConfig.line = {};
+        break;
+      case 'stick':
+        styleConfig.stick = { radius: bondRadius };
+        break;
+      default:
+        styleConfig.sphere = { radius: atomScale };
+        styleConfig.stick = { radius: bondRadius };
     }
 
     // Aplicar color al estilo (alto contraste, CPK u otros)
@@ -477,12 +621,7 @@
    */
   function applyBackground() {
     if (!viewer) return;
-    
-    const bgColor = currentBackground === '0x0b1220' ? 0x0b1220 : 
-                    currentBackground === '0xffffff' ? 0xffffff :
-                    currentBackground === 'black' ? 0x000000 : 0xffffff;
-    
-    viewer.setBackgroundColor(bgColor);
+    viewer.setBackgroundColor(backgroundHexFromSelectValue(currentBackground));
     viewer.render();
   }
 
@@ -539,37 +678,15 @@
     // Inicializar visibilidad del botón
     updateOpenControlsButton();
 
-    // Checkboxes de tipos de visualización
-    if (displayBallStick) {
-      displayBallStick.addEventListener('change', function() {
-        displayModes.ballStick = this.checked;
-        applyStyle();
+    const displayModeRadios = document.querySelectorAll('input[name="display-mode"]');
+    displayModeRadios.forEach(function (radio) {
+      radio.addEventListener('change', function () {
+        if (this.checked) {
+          displayMode = this.value;
+          applyStyle();
+        }
       });
-    }
-    if (displayLicorice) {
-      displayLicorice.addEventListener('change', function() {
-        displayModes.licorice = this.checked;
-        applyStyle();
-      });
-    }
-    if (displayVdw) {
-      displayVdw.addEventListener('change', function() {
-        displayModes.vdw = this.checked;
-        applyStyle();
-      });
-    }
-    if (displayWireframe) {
-      displayWireframe.addEventListener('change', function() {
-        displayModes.wireframe = this.checked;
-        applyStyle();
-      });
-    }
-    if (displayStick) {
-      displayStick.addEventListener('change', function() {
-        displayModes.stick = this.checked;
-        applyStyle();
-      });
-    }
+    });
     if (displayAxes) {
       displayAxes.addEventListener('change', function() {
         applyStyle();
@@ -702,8 +819,11 @@
     try {
       showLoading();
 
+      currentBackground = backgroundKeyFromUiTheme();
+      if (backgroundSelect) backgroundSelect.value = currentBackground;
+
       viewer = $3Dmol.createViewer(viewerEl, {
-        backgroundColor: 0x000000
+        backgroundColor: backgroundHexFromSelectValue(currentBackground)
       });
 
       var loaded = false;
@@ -785,38 +905,3 @@
   });
 
 })();
-
-/* ============================================
-   Selector de Temas (Claro / Oscuro)
-   ============================================ */
-   const themeSelect = document.getElementById('themeSelect');
-
-   function applyTheme(theme) {
-     if (theme === 'system') {
-       // Detecta la preferencia del sistema operativo
-       const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
-       document.documentElement.setAttribute('data-theme', prefersDark ? 'dark' : 'light');
-     } else {
-       // Aplica el tema seleccionado manualmente
-       document.documentElement.setAttribute('data-theme', theme);
-     }
-     // Guarda la preferencia en el navegador
-     localStorage.setItem('user-theme', theme);
-     if (themeSelect) themeSelect.value = theme;
-   }
-   
-   // 1. Inicialización: Carga el tema guardado o fuerza 'light' por defecto (ideal para tus capturas)
-   const savedTheme = localStorage.getItem('user-theme') || 'light'; 
-   applyTheme(savedTheme);
-   
-   // 2. Función global para ser llamada desde el HTML (onchange)
-   window.changeTheme = function(theme) {
-     applyTheme(theme);
-   };
-   
-   // 3. Escucha en tiempo real si el usuario cambia el tema de su Windows/Mac
-   window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => {
-     if (localStorage.getItem('user-theme') === 'system') {
-       applyTheme('system');
-     }
-   });

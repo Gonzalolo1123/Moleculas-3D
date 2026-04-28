@@ -1,208 +1,330 @@
 {% load static %}
 <!doctype html>
-<html lang="es">
+<html lang="es" class="home-layout-locked">
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <meta name="description" content="Sistema de visualización 3D de moléculas. Sube archivos en formato CML, PDB, SDF, MOL o XYZ y visualízalos en 3D." />
-    <meta name="keywords" content="moléculas, química, visualización 3D, CML, PDB, SDF" />
-    <title>Moléculas 3D - Sistema de Visualización</title>
+    <meta name="description" content="Importa y visualiza estructuras moleculares 3D. Carga masiva, formatos FAIR y visor integrado." />
+    <meta name="keywords" content="moléculas, química, visualización 3D, CML, PDB, SDF, carga masiva" />
+    <title>Moléculas 3D</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700;1,9..40,400&display=swap" rel="stylesheet" />
     <link rel="stylesheet" href="{% static 'molecules/css/index.css' %}" />
-    <!-- SweetAlert2 (para confirmaciones bonitas). Si no carga, cae a confirm() -->
+    <script>
+      (function () {
+        var t = localStorage.getItem("user-theme") || "system";
+        if (t === "system") {
+          document.documentElement.setAttribute(
+            "data-theme",
+            window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light"
+          );
+        } else {
+          document.documentElement.setAttribute("data-theme", t);
+        }
+      })();
+    </script>
     <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
     <script defer src="{% static 'molecules/validaciones.js' %}"></script>
     <script defer src="{% static 'molecules/js/index.js' %}"></script>
   </head>
   <body>
+    {% include "molecules/partials/site_chrome_top.html" %}
 
-    <header role="banner">
-      <div class="header-row">
-        <div class="header-text">
-          <h1 class="header-title">Moléculas 3D</h1>
-          <p class="hint">Sube un archivo (CML de Avogadro, o PDB/SDF/MOL/XYZ) y visualiza la molécula en 3D.</p>
-        </div>
-        
-        <div style="display: flex; align-items: center; gap: 16px; flex-wrap: wrap;">
-          
-          <div style="display: flex; align-items: center; gap: 8px;">
-            <label for="themeSelect" style="margin: 0; font-weight: 600; color: var(--text-secondary);">Tema:</label>
-            <select id="themeSelect" onchange="changeTheme(this.value)" style="width: auto; padding: 6px 32px 6px 12px; font-size: 0.85rem; border-radius: var(--radius-sm); background: var(--bg-input); color: var(--text-primary);">
-              <option value="system">🖥️ Sistema</option>
-              <option value="light">☀️ Claro</option>
-              <option value="dark">🌙 Oscuro</option>
-            </select>
-          </div>
-
-          <a href="/carga-masiva/" class="btn-bulk">Carga masiva</a>
-        </div>
-      </div>
-    </header>
-    <main class="grid" role="main">
-      <section class="card" aria-labelledby="upload-title">
-        <div class="section-header">
-          <h2 id="upload-title" class="section-title">Subir molécula</h2>
-          <span class="pill" aria-label="Método API">POST /api/molecules/</span>
-        </div>
-
-        {% if created_id %}
-          {% if duplicate %}
-          <div class="notice-dup" role="status" aria-live="polite">
-            <strong>No se creó un registro nuevo:</strong> esa molécula ya estaba en el sistema (mismo InChIKey o mismo archivo).
-            Abrir la existente:
-            <a href="/viewer/{{ created_id }}/" aria-label="Abrir visor de molécula {{ created_id }}">/viewer/{{ created_id }}/</a>
-          </div>
-          {% else %}
-          <div class="ok" role="alert" aria-live="polite">
-            <strong>¡Subida exitosa!</strong> Abrir visor:
-            <a href="/viewer/{{ created_id }}/" aria-label="Abrir visor de molécula {{ created_id }}">/viewer/{{ created_id }}/</a>
-          </div>
-          {% endif %}
-        {% endif %}
-
-        <form method="post" enctype="multipart/form-data" class="form-container" id="upload-form" aria-label="Formulario de subida de molécula">
-          {% csrf_token %}
-          <div class="form-grid">
-            <div class="form-group">
-              <label for="molecule-name">Nombre <span class="required" aria-label="requerido">*</span></label>
-              <input 
-                type="text" 
-                id="molecule-name"
-                name="name" 
-                placeholder="Ej: Cafeína" 
-                required 
-                aria-required="true"
-                aria-describedby="name-hint"
-              />
-              <span id="name-hint" class="field-hint">Nombre descriptivo de la molécula</span>
+    <main class="page-shell main-inner page-home layout-locked-main" role="main">
+      <div class="home-layout">
+        <div class="home-sidebar">
+          <section class="card card-bulk" id="import-section" aria-labelledby="import-title">
+            <div class="section-header">
+              <h2 id="import-title" class="section-title">Importar estructuras</h2>
+              <div class="section-header-actions">
+                <span class="pill pill-api" aria-label="Modo">Archivos</span>
+                <button
+                  type="button"
+                  class="card-toggle-btn"
+                  data-toggle-target="bulk-panel-body"
+                  aria-expanded="true"
+                  aria-label="Cerrar panel de carga masiva"
+                >
+                  <span class="card-toggle-btn__arrow" aria-hidden="true">▾</span>
+                </button>
+              </div>
             </div>
-            <div class="form-group">
-              <label for="molecule-format">Formato <span class="optional">(opcional)</span></label>
-              <select 
-                id="molecule-format"
-                name="format" 
-                aria-describedby="format-hint"
+            <div id="bulk-panel-body" class="card-collapsible-body">
+              <p class="field-hint import-lead">
+                Varios archivos o una carpeta completa; en el listado se usa el nombre del archivo (sin extensión).
+              </p>
+
+              <form method="post" enctype="multipart/form-data" class="form-container form-bulk-stretch" id="form-bulk-files">
+                {% csrf_token %}
+                <input type="hidden" name="form_type" value="bulk" />
+                <div class="form-group bulk-folder-mode bulk-form-fixed">
+                  <label class="bulk-checkbox">
+                    <input type="checkbox" id="toggle-folder-mode" class="input-checkbox-themed" />
+                    <span class="bulk-checkbox-text">Carpeta completa (en lugar de archivos sueltos)</span>
+                  </label>
+                </div>
+
+                <label
+                  class="bulk-drop-zone"
+                  id="bulk-drop-zone"
+                  for="bulk-files"
+                  data-drag-active="false"
+                  data-has-files="false"
+                >
+                  <input
+                    id="bulk-files"
+                    type="file"
+                    name="files"
+                    multiple
+                    class="bulk-files-fullhit"
+                    accept=".cml,.pdb,.sdf,.mol,.xyz,.mol2,.cif,.mmcif,.gro,.pqr,.pdbqt,.json"
+                    aria-label="Seleccionar o soltar archivos o carpeta para importar"
+                  />
+                  <span class="bulk-drop-visual">
+                    <span class="bulk-drop-icon" aria-hidden="true">⤓</span>
+                    <strong class="bulk-drop-title">Arrastra y suelta aquí</strong>
+                    <span class="bulk-drop-line">Archivos o carpeta completa</span>
+                    <span class="bulk-drop-cta">o pulsa en esta zona para elegir en el equipo</span>
+                  </span>
+                </label>
+
+                <div class="bulk-form-footer">
+                  <div class="bulk-staged" id="bulk-staged" hidden>
+                    <div class="bulk-staged-head">
+                      <span class="bulk-staged-icon" aria-hidden="true">✓</span>
+                      <span class="bulk-staged-title" id="bulk-staged-title"></span>
+                    </div>
+                    <ul class="bulk-chip-list" id="bulk-chip-list" role="list" aria-label="Archivos seleccionados"></ul>
+                  </div>
+                  <p class="bulk-file-summary bulk-file-summary-empty" id="bulk-file-summary" aria-live="polite">
+                    Ningún archivo seleccionado
+                  </p>
+                  <span class="field-hint bulk-form-hint">CML, PDB, SDF, MOL, XYZ, MOL2, CIF, mmCIF, GRO, PQR, PDBQT, JSON.</span>
+                  <button type="submit" class="btn-primary btn-primary-bulk">Importar archivos</button>
+                </div>
+              </form>
+            </div>
+          </section>
+
+          <section class="card card-single-details" id="upload-section">
+            <div class="section-header">
+              <h2 class="section-title single-details-title">Subida unitaria con nombre (opcional)</h2>
+              <button
+                type="button"
+                class="card-toggle-btn"
+                data-toggle-target="single-panel-body"
+                aria-expanded="{% if created_id %}true{% else %}false{% endif %}"
+                aria-label="{% if created_id %}Cerrar{% else %}Abrir{% endif %} panel de carga individual"
               >
-                <option value="">Auto-detectar por extensión</option>
-                <optgroup label="Formatos Básicos">
-                  <option value="cml">CML - Chemical Markup Language</option>
-                  <option value="pdb">PDB - Protein Data Bank</option>
-                  <option value="sdf">SDF - Structure Data Format</option>
-                  <option value="mol">MOL - MDL Molfile</option>
-                  <option value="xyz">XYZ - XYZ Coordinate</option>
-                </optgroup>
-                <optgroup label="Formatos FAIR/MDDB">
-                  <option value="mol2">MOL2 - Tripos Mol2</option>
-                  <option value="cif">CIF - Crystallographic Information File</option>
-                  <option value="mmcif">MMCIF - Macromolecular CIF</option>
-                  <option value="gro">GRO - GROMACS</option>
-                  <option value="pqr">PQR - PQR Format</option>
-                  <option value="pdbqt">PDBQT - AutoDock</option>
-                  <option value="json">JSON - Estructurado</option>
-                </optgroup>
-              </select>
-              <span id="format-hint" class="field-hint">Formatos compatibles con estándares FAIR y MDDB. Si se deja en "Auto-detectar", se infiere por extensión del archivo.</span>
-            </div>
-            <div class="form-group">
-              <label for="molecule-file">Archivo <span class="required" aria-label="requerido">*</span></label>
-              <input 
-                type="file" 
-                id="molecule-file"
-                name="file" 
-                required 
-                aria-required="true"
-                accept=".cml,.pdb,.sdf,.mol,.xyz,.mol2,.cif,.mmcif,.gro,.pqr,.pdbqt,.json"
-                aria-describedby="file-hint"
-              />
-              <span id="file-hint" class="field-hint">Formatos soportados (FAIR/MDDB): CML, PDB, SDF, MOL, XYZ, MOL2, CIF, MMCIF, GRO, PQR, PDBQT, JSON</span>
-            </div>
-            <div class="form-group">
-              <button type="submit" class="btn-primary" aria-label="Subir molécula">
-                <span class="btn-text">Subir</span>
-                <span class="btn-loader" aria-hidden="true" style="display: none;">⏳</span>
+                <span class="card-toggle-btn__arrow" aria-hidden="true">{% if created_id %}▾{% else %}▸{% endif %}</span>
               </button>
             </div>
-          </div>
-        </form>
-      </section>
+            <div id="single-panel-body" class="single-details-body{% if not created_id %} is-collapsed{% endif %}">
+              <p class="field-hint single-details-intro">
+                Un solo archivo con nombre visible personalizado (útil para una molécula puntual).
+              </p>
 
-      <section class="card" aria-labelledby="molecules-title">
-        <div class="section-header">
-          <h2 id="molecules-title" class="section-title">Últimas moléculas</h2>
-          <span class="pill" aria-label="Base de datos">MongoDB</span>
-        </div>
-        <div class="table-container">
-          <table role="table" aria-label="Lista de moléculas">
-            <thead>
-              <tr>
-                <th scope="col">Nombre</th>
-                <th scope="col">Formato</th>
-                <th scope="col" class="actions-col">Acciones</th>
-              </tr>
-            </thead>
-            <tbody>
-              {% for m in items %}
-                <tr>
-                  <td data-label="Nombre">{{ m.name }}</td>
-                  <td data-label="Formato"><span class="format-badge">{{ m.format|upper }}</span></td>
-                  <td data-label="Acciones" class="actions-cell">
-                    <div class="action-buttons" role="group" aria-label="Acciones para {{ m.name }}">
-                      <a href="/viewer/{{ m.id }}/" class="btn-link" aria-label="Ver molécula {{ m.name }}">Ver</a>
-                      <a href="/api/molecules/{{ m.id }}/file/" class="btn-link" aria-label="Descargar archivo de {{ m.name }}" download>Archivo</a>
-                      <form
-                        method="post"
-                        action="/crud/delete/{{ m.id }}/"
-                        class="form-inline"
-                        data-confirm-delete="1"
-                        data-molecule-name="{{ m.name|default:'esta molécula' }}"
-                      >
-                        {% csrf_token %}
-                        <button type="submit" class="btn-delete" aria-label="Eliminar molécula {{ m.name }}">
-                          Eliminar
-                        </button>
-                      </form>
+              {% if created_id %}
+                {% if duplicate %}
+                <div class="notice notice-dup" role="status" aria-live="polite">
+                  <span class="notice-icon notice-icon-warn" aria-hidden="true"></span>
+                  <div class="notice-body">
+                    <strong>No se creó un registro nuevo</strong>
+                    <p>Ese archivo ya estaba en el sistema (mismo contenido binario). Puedes subir otra conformación si el InChIKey coincide pero el archivo es distinto.</p>
+                    <a class="btn-outline btn-outline-primary" href="/viewer/{{ created_id }}/">Abrir la existente en el visor</a>
+                  </div>
+                </div>
+                {% else %}
+                <div class="notice notice-ok" role="alert" aria-live="polite">
+                  <span class="notice-icon notice-icon-ok" aria-hidden="true"></span>
+                  <div class="notice-body">
+                    <strong>Subida exitosa</strong>
+                    <p>La molécula ya está disponible.</p>
+                    <a class="btn-outline btn-outline-primary" href="/viewer/{{ created_id }}/">Abrir en el visor 3D</a>
+                  </div>
+                </div>
+                {% endif %}
+              {% endif %}
+
+              <form method="post" enctype="multipart/form-data" class="form-container" id="upload-form" aria-label="Subida de una molécula con nombre">
+                {% csrf_token %}
+                <input type="hidden" name="form_type" value="single" />
+                <div class="form-grid">
+                  <div class="form-group">
+                    <label for="molecule-name">Nombre <span class="required" aria-label="requerido">*</span></label>
+                    <input
+                      type="text"
+                      id="molecule-name"
+                      name="name"
+                      class="input-text-themed"
+                      placeholder="Ej: Cafeína"
+                      required
+                      aria-required="true"
+                      aria-describedby="name-hint"
+                    />
+                    <span id="name-hint" class="field-hint">Nombre que verás en el listado</span>
+                  </div>
+                  <div class="form-group">
+                    <label for="molecule-format">Formato <span class="optional">(opcional)</span></label>
+                    <select id="molecule-format" name="format" class="input-select-themed" aria-describedby="format-hint">
+                      <option value="">Auto (por extensión)</option>
+                      <optgroup label="Básicos">
+                        <option value="cml" title="Chemical Markup Language">CML</option>
+                        <option value="pdb" title="Protein Data Bank">PDB</option>
+                        <option value="sdf" title="Structure Data Format">SDF</option>
+                        <option value="mol" title="MDL Molfile">MOL</option>
+                        <option value="xyz" title="Coordenadas XYZ">XYZ</option>
+                      </optgroup>
+                      <optgroup label="FAIR / MDDB">
+                        <option value="mol2" title="Tripos Mol2">MOL2</option>
+                        <option value="cif" title="Crystallographic Information">CIF</option>
+                        <option value="mmcif" title="Macromolecular CIF">mmCIF</option>
+                        <option value="gro" title="GROMACS">GRO</option>
+                        <option value="pqr" title="PQR">PQR</option>
+                        <option value="pdbqt" title="AutoDock PDBQT">PDBQT</option>
+                        <option value="json" title="Estructura JSON FAIR">JSON</option>
+                      </optgroup>
+                    </select>
+                    <span id="format-hint" class="field-hint">Si eliges «Auto», el formato se infiere por la extensión.</span>
+                  </div>
+                  <div class="form-group">
+                    <label for="conformer-type">Tipo de estructura / conformación</label>
+                    <select id="conformer-type" name="conformer_type" class="input-select-themed" aria-describedby="conformer-hint">
+                      {% for key, label in conformer_choices %}
+                        <option value="{{ key }}"{% if key == "unspecified" %} selected{% endif %}>{{ label }}</option>
+                      {% endfor %}
+                    </select>
+                    <span id="conformer-hint" class="field-hint">
+                      Para ciclohexano y similares: silla, barco, twist-boat, etc. Varios archivos con el mismo InChIKey se enlazan en el visor.
+                    </span>
+                  </div>
+                  <div class="form-group">
+                    <label for="molecule-file">Archivo <span class="required" aria-label="requerido">*</span></label>
+                    <div class="file-drop-zone" id="file-drop-zone" data-drop-active="false">
+                      <input
+                        type="file"
+                        id="molecule-file"
+                        name="file"
+                        class="file-drop-input"
+                        required
+                        aria-required="true"
+                        accept=".cml,.pdb,.sdf,.mol,.xyz,.mol2,.cif,.mmcif,.gro,.pqr,.pdbqt,.json"
+                        aria-describedby="file-hint"
+                      />
+                      <label for="molecule-file" class="file-drop-label">
+                        <span class="file-drop-title">Arrastra un archivo aquí</span>
+                        <span class="file-drop-sub">o haz clic para elegir</span>
+                        <span class="file-drop-name" id="file-drop-name" hidden></span>
+                      </label>
                     </div>
-                  </td>
-                </tr>
-              {% empty %}
-                <tr>
-                  <td colspan="3" class="empty-state">
-                    <p class="hint">Aún no hay moléculas. Sube la primera y se creará la colección <strong>molecules</strong> en MongoDB.</p>
-                  </td>
-                </tr>
-              {% endfor %}
-            </tbody>
-          </table>
+                    <span id="file-hint" class="field-hint">Máx. 10&nbsp;MB comprobado en el navegador.</span>
+                  </div>
+                  <div class="form-group form-actions">
+                    <button type="submit" class="btn-primary" aria-label="Subir molécula">
+                      <span class="btn-text">Subir</span>
+                      <span class="btn-loader" aria-hidden="true" hidden>⏳</span>
+                    </button>
+                  </div>
+                </div>
+              </form>
+            </div>
+          </section>
         </div>
-      </section>
+
+        <section class="card card-list" id="list-section" aria-labelledby="molecules-title">
+          <div class="section-header">
+            <h2 id="molecules-title" class="section-title">Últimas moléculas</h2>
+            <div class="section-header-actions">
+              <button type="button" id="btn-recompute-identifiers-all" class="btn-outline btn-outline-warn" title="Temporal: recalcula InChIKey y SMILES en toda la colección">
+                Recalcular IDs químicas (temporal)
+              </button>
+              <span class="pill pill-db" aria-label="Base de datos">MongoDB</span>
+            </div>
+          </div>
+          <div class="table-scroll table-container">
+            <table role="table" aria-label="Lista de moléculas">
+              <thead>
+                <tr>
+                  <th scope="col" class="th-name">Nombre</th>
+                  <th scope="col" class="th-conformer">Estructura</th>
+                  <th scope="col" class="th-format">Formato</th>
+                  <th scope="col" class="th-date">Fecha</th>
+                  <th scope="col" class="actions-col">Acciones</th>
+                </tr>
+              </thead>
+              <tbody>
+                {% for m in items %}
+                  <tr>
+                    <td data-label="Nombre" class="td-name">{{ m.name|capfirst }}</td>
+                    <td data-label="Estructura" class="td-conformer">
+                      <span class="conformer-pill" title="{{ m.structure_count }} estructuras disponibles">
+                        {{ m.structure_count }} disponibles
+                      </span>
+                    </td>
+                    <td data-label="Formato"><span class="format-badge">{{ m.format|upper }}</span></td>
+                    <td data-label="Fecha" class="cell-date">
+                      {% if m.created_at %}
+                        {{ m.created_at|date:"d/m/Y H:i" }}
+                      {% else %}
+                        —
+                      {% endif %}
+                    </td>
+                    <td data-label="Acciones" class="actions-cell">
+                      <div class="action-buttons" role="group" aria-label="Acciones para {{ m.name }}">
+                        <a href="/viewer/{{ m.id }}/" class="btn-outline" aria-label="Ver molécula {{ m.name }}">Ver</a>
+                        <button
+                          type="button"
+                          class="btn-outline js-edit-molecule"
+                          data-id="{{ m.id }}"
+                          data-name="{{ m.name|escape }}"
+                          data-format="{{ m.format|default:''|lower }}"
+                          data-conformer-type="{{ m.conformer_type|default:'unspecified' }}"
+                          data-conformer-custom="{{ m.conformer_custom_label|default:''|escape }}"
+                          data-group-key="{{ m.group_key|default:''|escape }}"
+                          aria-label="Editar molécula {{ m.name }}"
+                        >
+                          Editar
+                        </button>
+                        <form
+                          method="post"
+                          action="/crud/delete/{{ m.id }}/"
+                          class="form-inline"
+                          data-confirm-delete="1"
+                          data-molecule-name="{{ m.name|default:'esta molécula' }}"
+                        >
+                          {% csrf_token %}
+                          <button type="submit" class="btn-delete" aria-label="Eliminar molécula {{ m.name }}">Eliminar</button>
+                        </form>
+                      </div>
+                    </td>
+                  </tr>
+                {% empty %}
+                  <tr>
+                    <td colspan="5" class="empty-state">
+                      <div class="empty-state-inner">
+                        <svg class="empty-illustration" viewBox="0 0 120 100" aria-hidden="true" focusable="false">
+                          <ellipse cx="60" cy="88" rx="40" ry="6" fill="currentColor" opacity="0.12" />
+                          <circle cx="60" cy="42" r="28" fill="none" stroke="currentColor" stroke-width="2" opacity="0.35" />
+                          <circle cx="48" cy="38" r="4" fill="currentColor" opacity="0.5" />
+                          <circle cx="72" cy="38" r="4" fill="currentColor" opacity="0.5" />
+                          <path d="M48 52 Q60 60 72 52" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" opacity="0.45" />
+                          <circle cx="60" cy="42" r="3" fill="currentColor" opacity="0.25" />
+                        </svg>
+                        <p class="empty-title">Aún no hay moléculas</p>
+                        <p class="hint empty-hint">
+                          Importa archivos arriba y se creará la colección <strong>molecules</strong> en MongoDB.
+                        </p>
+                        <a href="#import-section" class="btn-outline btn-outline-primary empty-cta">Importar estructuras</a>
+                      </div>
+                    </td>
+                  </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+        </section>
+      </div>
     </main>
-    <script>
-      const themeSelect = document.getElementById('themeSelect');
-
-      function applyTheme(theme) {
-        if (theme === 'system') {
-          const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
-          document.documentElement.setAttribute('data-theme', prefersDark ? 'dark' : 'light');
-        } else {
-          document.documentElement.setAttribute('data-theme', theme);
-        }
-        localStorage.setItem('user-theme', theme);
-        if (themeSelect) themeSelect.value = theme;
-      }
-
-      // 1. Iniciar con el tema Claro por defecto para tu captura
-      const savedTheme = localStorage.getItem('user-theme') || 'light';
-      applyTheme(savedTheme);
-
-      // 2. Hacer la función global para que funcione el 'onchange'
-      window.changeTheme = function(theme) {
-        applyTheme(theme);
-      };
-
-      // 3. Escuchar al sistema operativo
-      window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => {
-        if (localStorage.getItem('user-theme') === 'system') applyTheme('system');
-      });
-    </script>
   </body>
 </html>
-

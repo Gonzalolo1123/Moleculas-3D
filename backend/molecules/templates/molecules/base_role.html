@@ -1,0 +1,39 @@
+{% load static %}
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>{% block title %}Moléculas 3D{% endblock %}</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700;1,9..40,400&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="{% static 'molecules/css/index.css' %}" />
+    <script>
+      (function () {
+        var t = localStorage.getItem("user-theme") || "system";
+        if (t === "system") {
+          document.documentElement.setAttribute(
+            "data-theme",
+            window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light"
+          );
+        } else {
+          document.documentElement.setAttribute("data-theme", t);
+        }
+      })();
+    </script>
+    {% block extra_head %}{% endblock %}
+  </head>
+  <body class="page-role-body">
+    {% include "molecules/partials/site_chrome_top.html" %}
+
+    <main class="page-shell main-inner page-role-main" role="main">
+      {% block role_content %}{% endblock %}
+    </main>
+
+    {% block extra_scripts %}
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+    <script defer src="{% static 'molecules/js/index.js' %}"></script>
+    {% endblock %}
+  </body>
+</html>

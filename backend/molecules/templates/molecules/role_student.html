@@ -1,0 +1,97 @@
+{% extends "molecules/base_role.html" %}
+{% load static %}
+{% block title %}Estudiantes · Moléculas 3D{% endblock %}
+{% block role_content %}
+  <section class="card role-intro-card" aria-labelledby="stu-intro-title">
+    <h2 id="stu-intro-title" class="section-title">Biblioteca y glosario</h2>
+    <p class="field-hint role-intro-text">
+      Propuesta de interfaz: el estudiante explora el mismo catálogo con búsqueda sencilla, marca <strong>favoritos</strong> y organiza referencias en
+      <strong>carpetas locales</strong> (aquí guardadas solo en el navegador como demo). Sin permisos de subida ni borrado.
+    </p>
+  </section>
+
+  <div class="role-layout role-layout--student">
+    <aside class="card role-aside" aria-labelledby="stu-shelf-title">
+      <h2 id="stu-shelf-title" class="section-title">Mi estantería</h2>
+      <p class="field-hint">Favoritos y carpetas (demo en <code>localStorage</code>).</p>
+      <div class="role-shelf-block">
+        <h3 class="role-shelf-subtitle">Favoritos <span class="role-count" id="stu-fav-count">0</span></h3>
+        <ul class="role-shelf-list" id="stu-fav-list" aria-live="polite"></ul>
+      </div>
+      <div class="role-shelf-block">
+        <h3 class="role-shelf-subtitle">Carpetas</h3>
+        <ul class="role-shelf-list" id="stu-folder-list"></ul>
+        <button type="button" class="btn-secondary role-mock-btn" id="stu-new-folder">+ Nueva carpeta</button>
+      </div>
+    </aside>
+
+    <div class="role-main-stack">
+      <section class="card" aria-labelledby="lib-title">
+        <div class="section-header">
+          <h2 id="lib-title" class="section-title">Explorar moléculas</h2>
+          <span class="pill pill-db">Lectura</span>
+        </div>
+        <div class="role-toolbar">
+          <label class="sr-only" for="stu-filter-q">Buscar</label>
+          <input
+            type="search"
+            id="stu-filter-q"
+            class="input-text-themed role-toolbar-search"
+            placeholder="Buscar en la biblioteca…"
+            autocomplete="off"
+          />
+          <label class="sr-only" for="stu-filter-subject">Materia</label>
+          <select id="stu-filter-subject" class="input-select-themed role-toolbar-select">
+            <option value="">Todas las materias</option>
+            {% for s in demo_subject_list %}
+              <option value="{{ s }}">{{ s }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="table-scroll table-container">
+          <table class="role-data-table" id="stu-molecule-table" role="table">
+            <thead>
+              <tr>
+                <th scope="col" class="th-icon" aria-label="Favorito"></th>
+                <th scope="col" class="th-name">Nombre</th>
+                <th scope="col">Materia</th>
+                <th scope="col" class="th-format">Formato</th>
+                <th scope="col" class="actions-col">Acciones</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for m in items %}
+                <tr class="stu-mol-row" data-name="{{ m.name|default:''|lower }}" data-subject="{{ m.demo_subject }}" data-id="{{ m.id }}">
+                  <td class="td-fav">
+                    <button type="button" class="btn-favorite" data-id="{{ m.id }}" aria-pressed="false" aria-label="Favorito: {{ m.name }}" title="Favorito">☆</button>
+                  </td>
+                  <td data-label="Nombre" class="td-name">{{ m.name|capfirst }}</td>
+                  <td data-label="Materia"><span class="pill pill-api">{{ m.demo_subject }}</span></td>
+                  <td data-label="Formato"><span class="format-badge">{{ m.format|upper }}</span></td>
+                  <td data-label="Acciones" class="actions-cell">
+                    <div class="action-buttons" role="group">
+                      <a href="/viewer/{{ m.id }}/" class="btn-outline">Ver</a>
+                      <a href="/api/molecules/{{ m.id }}/file/" class="btn-outline" download>Archivo</a>
+                      <button type="button" class="btn-secondary role-mock-btn stu-add-folder" data-id="{{ m.id }}" data-label="{{ m.name|escape }}">Carpeta…</button>
+                    </div>
+                  </td>
+                </tr>
+              {% empty %}
+                <tr>
+                  <td colspan="5" class="empty-state">
+                    <p class="empty-title">Biblioteca vacía</p>
+                    <p class="hint">Pide al docente o al administrador que comparta estructuras.</p>
+                  </td>
+                </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </section>
+    </div>
+  </div>
+{% endblock %}
+{% block extra_scripts %}
+  {{ block.super }}
+  <script defer src="{% static 'molecules/js/role-student.js' %}"></script>
+{% endblock %}
